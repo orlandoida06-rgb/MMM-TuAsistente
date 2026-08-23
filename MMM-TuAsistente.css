@@ -1,0 +1,132 @@
+
+.asistente-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-family: "Roboto", sans-serif;
+  max-width: 600px;
+  margin: 0 auto;
+  opacity: 1;
+  transition: opacity 0.5s ease-in-out;
+}
+
+/* Ocultar dinámicamente cuando no hay interacción */
+.asistente-container.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Contenedor ampliado de la imagen */
+.icon-container {
+  width: 220px;
+  height: 220px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 30px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 2px solid rgba(255, 255, 255, 0.15);
+  overflow: hidden;
+  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.state-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.3s ease, filter 0.3s ease;
+}
+
+/* --- ANIMACIONES Y ESTADOS --- */
+
+/* Estado: GRABANDO (recording.jpg) */
+.icon-container.recording {
+  background: rgba(255, 59, 48, 0.15);
+  border-color: rgba(255, 59, 48, 0.9);
+  animation: pulse-glow-red 1.4s infinite ease-in-out;
+}
+
+.icon-container.recording .state-img {
+  animation: zoom-pulse 1.4s infinite ease-in-out;
+}
+
+/* Estado: PENSANDO (thinking.png) */
+.icon-container.thinking {
+  background: rgba(10, 132, 255, 0.15);
+  border-color: rgba(10, 132, 255, 0.8);
+  animation: pulse-glow-blue 2s infinite ease-in-out;
+}
+
+.icon-container.thinking .state-img {
+  animation: breathe-rotate 4s infinite ease-in-out;
+}
+
+/* Estado: HABLANDO */
+.icon-container.speaking {
+  background: rgba(48, 209, 88, 0.15);
+  border-color: rgba(48, 209, 88, 0.8);
+  box-shadow: 0 0 45px rgba(48, 209, 88, 0.6);
+  animation: bounce-gentle 1.6s infinite ease-in-out;
+}
+
+/* --- KEYFRAMES DE ANIMACIÓN --- */
+
+/* Pulsación con destello rojo para la grabación */
+@keyframes pulse-glow-red {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 25px rgba(255, 59, 48, 0.4);
+  }
+  50% {
+    transform: scale(1.06);
+    box-shadow: 0 0 55px rgba(255, 59, 48, 0.9);
+  }
+}
+
+/* Latido suave de la imagen al grabar */
+@keyframes zoom-pulse {
+  0%, 100% { transform: scale(1); filter: brightness(1); }
+  50% { transform: scale(1.08); filter: brightness(1.2); }
+}
+
+/* Pulsación con resplandor azul al procesar */
+@keyframes pulse-glow-blue {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 25px rgba(10, 132, 255, 0.4);
+  }
+  50% {
+    transform: scale(1.04);
+    box-shadow: 0 0 45px rgba(10, 132, 255, 0.8);
+  }
+}
+
+/* Giro sutil y respiración para la imagen de pensando */
+@keyframes breathe-rotate {
+  0%, 100% { transform: scale(1) rotate(0deg); }
+  50% { transform: scale(1.05) rotate(2deg); }
+}
+
+/* Movimiento suave de balanceo al responder */
+@keyframes bounce-gentle {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
+/* Textos adaptados */
+.user-query {
+  margin-top: 16px;
+  font-size: 18px;
+  font-style: italic;
+  color: #bbbbbb;
+  text-align: center;
+}
+
+.assistant-response {
+  margin-top: 14px;
+  font-size: 22px;
+  font-weight: 300;
+  color: #ffffff;
+  text-align: center;
+  line-height: 1.4;
+}
