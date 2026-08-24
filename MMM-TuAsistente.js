@@ -16,6 +16,18 @@ Module.register("MMM-TuAsistente", {
     this.hideTimer = null;
 
     this.sendSocketNotification("INIT_CONFIG", this.config);
+this.youtubePlayer = null;
+this.youtubeApiReady = false;
+
+if (!window.YT) {
+  const tag = document.createElement("script");
+  tag.src = "https://www.youtube.com/iframe_api";
+  document.head.appendChild(tag);
+}
+
+window.onYouTubeIframeAPIReady = () => {
+  this.youtubeApiReady = true;
+};
   },
 
   getImageForState: function (state) {
@@ -118,6 +130,9 @@ Module.register("MMM-TuAsistente", {
       this.assistantResponse = "";
 
       this.updateDom(300);
+setTimeout(() => {
+  this.initYouTubePlayer();
+}, 500);
     }
 
 
@@ -133,7 +148,35 @@ Module.register("MMM-TuAsistente", {
     }
   },
 
+initYouTubePlayer: function () {
 
+  const iframe = document.querySelector(".youtube-iframe");
+
+  if (!iframe || !this.youtubeApiReady) {
+    return;
+  }
+
+  this.youtubePlayer = new YT.Player(iframe, {
+
+    events: {
+      onStateChange: (event) => {
+
+        // 0 = vídeo terminado
+        if (event.data === YT.PlayerState.ENDED) {
+
+          this.youtubeVideoId = null;
+          this.youtubePlayer = null;
+
+          this.currentState = "hidden";
+          this.userQuery = "";
+          this.assistantResponse = "";
+
+          this.updateDom(300);
+        }
+      }
+    }
+  });
+},
   getDom: function () {
 
     const wrapper = document.createElement("div");
