@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 import os
 import sys
 
@@ -13,8 +15,11 @@ from faster_whisper import WhisperModel
 SAMPLE_RATE = 16000
 CHANNELS = 1
 BLOCKSIZE = 1024
+
+# Índice del micrófono
 DEVICE_INDEX = 4
 
+# Estado de grabación
 is_recording = False
 audio_buffer = []
 
@@ -22,9 +27,8 @@ audio_buffer = []
 print("[transcribe] Loading Whisper...", flush=True)
 
 try:
-
     model = WhisperModel(
-        "tiny",
+        "base",
         device="cpu",
         compute_type="int8",
         cpu_threads=2,
@@ -32,12 +36,10 @@ try:
     )
 
 except Exception as e:
-
     print(
         f"ERROR loading Whisper: {e}",
         flush=True
     )
-
     sys.exit(1)
 
 
@@ -45,11 +47,9 @@ print("[transcribe] Whisper ready.", flush=True)
 
 
 def callback(indata, frames, time_info, status):
-
     global is_recording
 
     if status:
-
         print(
             f"[audio] {status}",
             file=sys.stderr,
@@ -57,14 +57,10 @@ def callback(indata, frames, time_info, status):
         )
 
     if is_recording:
-
-        audio_buffer.append(
-            indata.copy()
-        )
+        audio_buffer.append(indata.copy())
 
 
 try:
-
     stream = sd.InputStream(
         samplerate=SAMPLE_RATE,
         channels=CHANNELS,
@@ -77,12 +73,10 @@ try:
     stream.start()
 
 except Exception as e:
-
     print(
         f"ERROR opening microphone: {e}",
         flush=True
     )
-
     sys.exit(1)
 
 
@@ -90,16 +84,13 @@ print("[transcribe] Microphone ready.", flush=True)
 
 
 def transcribe_audio():
-
     global audio_buffer
 
     if not audio_buffer:
-
         print(
             "TRANSCRIPTION:",
             flush=True
         )
-
         return
 
     audio_data = np.concatenate(
@@ -110,7 +101,6 @@ def transcribe_audio():
     audio_buffer.clear()
 
     try:
-
         segments, info = model.transcribe(
             audio_data,
             language="es",
@@ -131,7 +121,6 @@ def transcribe_audio():
         )
 
     except Exception as e:
-
         print(
             f"ERROR transcription: {e}",
             flush=True
@@ -139,11 +128,9 @@ def transcribe_audio():
 
 
 try:
-
     for line in sys.stdin:
 
         command = line.strip()
-
 
         if command == "START":
 
@@ -155,7 +142,6 @@ try:
                 "RECORDING_STARTED",
                 flush=True
             )
-
 
         elif command == "STOP":
 
@@ -170,24 +156,19 @@ try:
 
 
 except KeyboardInterrupt:
-
     pass
 
-
 except Exception as e:
-
     print(
         f"ERROR main loop: {e}",
         flush=True
     )
-
 
 finally:
 
     is_recording = False
 
     try:
-
         stream.stop()
         stream.close()
 

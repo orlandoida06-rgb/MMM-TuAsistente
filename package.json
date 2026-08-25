@@ -1,0 +1,24 @@
+{
+  "name": "mmm-tuasistente",
+  "version": "1.0.0",
+  "description": "**MMM-TuAsistente** es un m�dulo inteligente y local para **MagicMirror�** impulsado por modelos LLM locales (**Ollama / Qwen**), s�ntesis de voz offline (**Piper TTS**) y detecci�n de voz/PTT (**OpenWakeWord** / Tecla f�sica). Dise�ado y optimizado para funcionar de manera fluida en placas SBC como **Orange Pi 5** y **Raspberry Pi**.",
+  "main": "MMM-TuAsistente.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/orlandoida06-rgb/MMM-TuAssistente.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/orlandoida06-rgb/MMM-TuAssistente/issues"
+  },
+  "homepage": "https://github.com/orlandoida06-rgb/MMM-TuAssistente#readme",
+  "dependencies": {
+    "axios": "^1.19.0",
+    "node-record-lpcm16": "^1.0.1"
+  }
+}

@@ -164,12 +164,13 @@
    ========================================= */
 
 .user-query {
-  margin-top: 16px;
-  font-size: 18px;
+  margin-top: 18px;
+  font-size: 20px;
   font-style: italic;
-  color: #bbbbbb;
+  color: #30d158; /* Verde Neón suave de estado speaking */
   text-align: center;
   line-height: 1.3;
+  word-wrap: break-word;
 }
 
 /* =========================================
@@ -184,6 +185,12 @@
   text-align: center;
   line-height: 1.4;
   max-width: 580px;
+  background: rgba(0, 0, 0, 0.4);
+  padding: 14px 20px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(8px);
+  word-wrap: break-word;
 }
 
 /* --- REPRODUCTOR YOUTUBE --- */
@@ -206,4 +213,64 @@
   height: 500px;
   border: none;
   border-radius: 18px;
+}
+/* =========================================
+   CONSULTA DEL USUARIO
+   ========================================= */
+
+.user-query {
+  margin-top: 18px;
+  font-size: 20px;
+  font-style: italic;
+  color: #30d158;
+  text-align: center;
+  line-height: 1.3;
+  word-wrap: break-word;
+  opacity: 1;
+  animation: fadeInText 0.4s ease-out forwards;
+}
+
+/* =========================================
+   RESPUESTA DEL ASISTENTE
+   ========================================= */
+
+.assistant-response {
+  margin-top: 14px;
+  font-size: 22px;
+  font-weight: 300;
+  color: #ffffff;
+  text-align: center;
+  line-height: 1.4;
+  max-width: 580px;
+  background: rgba(0, 0, 0, 0.65); /* Un poco más oscuro para asegurar legibilidad en el espejo */
+  padding: 16px 22px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(10px);
+  word-wrap: break-word;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  animation: fadeInUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* =========================================
+   ANIMACIONES DE TEXTO
+   ========================================= */
+
+@keyframes fadeInText {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+  }
 }

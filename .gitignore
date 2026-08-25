@@ -1,0 +1,19 @@
+# Entornos virtuales y temporales de Python
+venv/
+env/
+__pycache__/
+*.py[cod]
+
+# Modelos y archivos pesados de IA (ONNX, Piper, Kokoro)
+*.onnx
+*.bin
+piper_tts/
+
+# Grabaciones y pruebas de audio
+*.wav
+*.mp3
+/tmp/
+
+# Archivos de sistema y entorno
+.DS_Store
+.env

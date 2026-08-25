@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 import evdev
 from evdev import InputDevice, categorize, ecodes
 import sys
@@ -13,10 +15,10 @@ transcribe_script = os.path.join(BASE_DIR, "transcribe.py")
 
 def find_keyboard():
 
-    for path in evdev.list_devices():
+    for device_path in evdev.list_devices():
 
         try:
-            dev = evdev.InputDevice(path)
+            dev = evdev.InputDevice(device_path)
             capabilities = dev.capabilities()
 
             if ecodes.EV_KEY not in capabilities:
@@ -205,13 +207,18 @@ try:
         if event.type != ecodes.EV_KEY:
             continue
 
-        key_event = categorize(event)
-
-        if key_event.keycode != "KEY_SPACE":
+        # 1 = pulsación
+        # 0 = liberación
+        # 2 = autorepetición
+        if event.value == 2:
             continue
 
+        # Comprobamos directamente el código numérico
+        # KEY_SPACE = 57
+        if event.code != ecodes.KEY_SPACE:
+            continue
 
-        if key_event.keystate == key_event.key_down:
+        if event.value == 1:
 
             if not is_pressed:
 
@@ -224,8 +231,7 @@ try:
 
                 send_command("START")
 
-
-        elif key_event.keystate == key_event.key_up:
+        elif event.value == 0:
 
             if is_pressed:
 
@@ -261,10 +267,13 @@ finally:
             transcribe_proc.terminate()
 
             try:
+
                 transcribe_proc.wait(timeout=2)
 
             except subprocess.TimeoutExpired:
+
                 transcribe_proc.kill()
 
     except Exception:
+
         pass

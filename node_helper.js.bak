@@ -1,0 +1,1670 @@
+'use strict';
+
+const NodeHelper = require('node_helper');
+const { Ollama } = require('ollama');
+const { spawn, exec } = require('child_process');
+const fs = require('fs');
+const path = require('path');
+
+module.exports = NodeHelper.create({
+
+  systemPrompt:
+    'Eres Jarvis, un asistente de voz conciso para un espejo inteligente (MagicMirror). ' +
+    'Responde siempre en español, con oraciones breves, claras y naturales. ' +
+    'No uses Markdown, listas, asteriscos ni símbolos innecesarios. ' +
+    'Las respuestas serán leídas en voz alta.',
+
+  async start() {
+
+    console.log('[MMM-TuAsistente] Node helper iniciado.');
+
+    this.ollama = new Ollama({
+      host: 'http://localhost:11434'
+    });
+
+    this.audioProcesses = [];
+
+    this.isSpeaking = false;
+    this.isThinking = false;
+
+    this.keyListenerProcess = null;
+    this.wakeWordProcess = null;
+
+    this.config = {};
+
+    console.log('[MMM-TuAsistente] Sistema preparado.');
+  },
+
+
+  // ============================================================
+  // CORRECCIÓN DE TRANSCRIPCIONES
+  // ============================================================
+
+  correctTranscription(query) {
+
+    if (!query) {
+      return '';
+    }
+
+    let corrected = query.trim();
+
+    /*
+     * Correcciones habituales de Whisper
+     */
+
+    corrected = corrected
+      .replace(/la niña mala/gi, 'Lamine Yamal')
+      .replace(/la nina mala/gi, 'Lamine Yamal')
+      .replace(/la niña mal/gi, 'Lamine Yamal')
+      .replace(/la nina mal/gi, 'Lamine Yamal')
+      .replace(/lamin yamal/gi, 'Lamine Yamal')
+      .replace(/lamine yama/gi, 'Lamine Yamal')
+      .replace(/lamin yama/gi, 'Lamine Yamal')
+      .replace(/lamine yamal/gi, 'Lamine Yamal');
+
+    corrected = corrected
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    return corrected;
+  },
+
+
+  // ============================================================
+  // AUDIO
+  // ============================================================
+
+  stopAudio() {
+
+    console.log('[MMM-TuAsistente] Deteniendo audio.');
+
+    exec(
+      'pkill -9 aplay 2>/dev/null; pkill -9 piper 2>/dev/null',
+      () => {}
+    );
+
+    this.audioProcesses = [];
+
+    this.isSpeaking = false;
+    this.isThinking = false;
+  },
+
+
+  // ============================================================
+  // PTT
+  // ============================================================
+
+  listenToKeyboard() {
+
+    if (this.keyListenerProcess !== null) {
+      return;
+    }
+
+    const pythonExec = path.join(
+      __dirname,
+      'venv',
+      'bin',
+      'python3'
+    );
+
+    const listenerScript = path.join(
+      __dirname,
+      'listen_key.py'
+    );
+
+    if (!fs.existsSync(listenerScript)) {
+
+      console.error(
+        '[MMM-TuAsistente] ERROR: No existe listen_key.py'
+      );
+
+      return;
+    }
+
+    console.log(
+      '[MMM-TuAsistente] Iniciando PTT. Idioma:',
+      this.config.language || 'es'
+    );
+
+    this.keyListenerProcess = spawn(
+      pythonExec,
+      [listenerScript],
+      {
+        stdio: ['ignore', 'pipe', 'pipe']
+      }
+    );
+
+    this.keyListenerProcess.stdout.on(
+      'data',
+      (data) => {
+
+        this.handleTranscriptionOutput(
+          data.toString()
+        );
+
+      }
+    );
+
+    this.keyListenerProcess.stderr.on(
+      'data',
+      (data) => {
+
+        const text = data.toString().trim();
+
+        if (text) {
+
+          console.error(
+            '[MMM-TuAsistente] PTT:',
+            text
+          );
+        }
+
+      }
+    );
+
+    this.keyListenerProcess.on(
+      'close',
+      (code) => {
+
+        console.log(
+          '[MMM-TuAsistente] PTT detenido. Código:',
+          code
+        );
+
+        this.keyListenerProcess = null;
+      }
+    );
+  },
+
+
+  // ============================================================
+  // WAKE WORD
+  // ============================================================
+
+  startWakeWordListener() {
+
+    if (this.wakeWordProcess !== null) {
+      return;
+    }
+
+    const pythonExec = path.join(
+      __dirname,
+      'venv',
+      'bin',
+      'python3'
+    );
+
+    const scriptPath = path.join(
+      __dirname,
+      'scripts',
+      'wakeword_listener.py'
+    );
+
+    if (!fs.existsSync(scriptPath)) {
+
+      console.error(
+        '[MMM-TuAsistente] ERROR: No existe wakeword_listener.py'
+      );
+
+      return;
+    }
+
+    const modelName =
+      this.config.wakeWordModel ||
+      'hey_mycroft';
+
+    const threshold =
+      this.config.wakeWordThreshold !== undefined
+        ? String(this.config.wakeWordThreshold)
+        : '0.5';
+
+    const micIndex =
+      this.config.micDeviceIndex !== undefined &&
+      this.config.micDeviceIndex !== null
+        ? String(this.config.micDeviceIndex)
+        : 'null';
+
+    console.log(
+      `[MMM-TuAsistente] OpenWakeWord: ${modelName}`
+    );
+
+    console.log(
+      `[MMM-TuAsistente] Umbral: ${threshold}`
+    );
+
+    this.wakeWordProcess = spawn(
+      pythonExec,
+      [
+        scriptPath,
+        modelName,
+        threshold,
+        micIndex
+      ],
+      {
+        stdio: ['ignore', 'pipe', 'pipe']
+      }
+    );
+
+    this.wakeWordProcess.stdout.on(
+      'data',
+      (data) => {
+
+        const lines =
+          data.toString().split('\n');
+
+        lines.forEach(
+          (line) => {
+
+            if (!line.trim()) {
+              return;
+            }
+
+            try {
+
+              const message =
+                JSON.parse(line.trim());
+
+              if (
+                message.status === 'detected'
+              ) {
+
+                console.log(
+                  '[MMM-TuAsistente] WakeWord detectado:',
+                  message.wakeword
+                );
+
+                /*
+                 * Si está hablando, detenerlo.
+                 */
+
+                if (this.isSpeaking) {
+                  this.stopAudio();
+                }
+
+                /*
+                 * Si está pensando, cancelamos el estado.
+                 */
+
+                this.isThinking = false;
+
+                this.sendSocketNotification(
+                  'WAKEWORD_DETECTED',
+                  message
+                );
+
+                this.sendSocketNotification(
+                  'STATUS',
+                  'Grabando...'
+                );
+
+                this.triggerVoiceRecording();
+              }
+
+            } catch (e) {
+
+              // Ignorar líneas que no sean JSON
+
+            }
+
+          }
+        );
+
+      }
+    );
+
+    this.wakeWordProcess.stderr.on(
+      'data',
+      (data) => {
+
+        const text =
+          data.toString().trim();
+
+        if (text) {
+
+          console.error(
+            '[MMM-TuAsistente] OpenWakeWord:',
+            text
+          );
+        }
+
+      }
+    );
+
+    this.wakeWordProcess.on(
+      'close',
+      () => {
+
+        console.log(
+          '[MMM-TuAsistente] OpenWakeWord detenido.'
+        );
+
+        this.wakeWordProcess = null;
+      }
+    );
+  },
+
+
+  // ============================================================
+  // GRABACIÓN
+  // ============================================================
+
+  triggerVoiceRecording() {
+
+    const pythonExec = path.join(
+      __dirname,
+      'venv',
+      'bin',
+      'python3'
+    );
+
+    const recordScript = path.join(
+      __dirname,
+      'listen_key.py'
+    );
+
+    if (!fs.existsSync(recordScript)) {
+      return;
+    }
+
+    const recorder = spawn(
+      pythonExec,
+      [
+        recordScript,
+        '--once'
+      ],
+      {
+        stdio: ['ignore', 'pipe', 'pipe']
+      }
+    );
+
+    recorder.stdout.on(
+      'data',
+      (data) => {
+
+        this.handleTranscriptionOutput(
+          data.toString()
+        );
+
+      }
+    );
+
+    recorder.stderr.on(
+      'data',
+      (data) => {
+
+        const text =
+          data.toString().trim();
+
+        if (text) {
+
+          console.error(
+            '[MMM-TuAsistente] Grabación:',
+            text
+          );
+        }
+
+      }
+    );
+  },
+
+
+  // ============================================================
+  // TRANSCRIPCIÓN
+  // ============================================================
+
+  handleTranscriptionOutput(output) {
+
+    if (
+      output.includes('RECORD_START')
+    ) {
+
+      /*
+       * Si empieza una grabación y todavía hay audio,
+       * detenerlo.
+       */
+
+      if (this.isSpeaking) {
+
+        this.stopAudio();
+
+        this.sendSocketNotification(
+          'STATUS',
+          'CANCELLED'
+        );
+
+        return;
+      }
+
+      this.sendSocketNotification(
+        'STATUS',
+        'Grabando...'
+      );
+    }
+
+
+    if (
+      output.includes('RECORD_STOP')
+    ) {
+
+      this.sendSocketNotification(
+        'STATUS',
+        'Pensando...'
+      );
+    }
+
+
+    const match =
+      output.match(/TRANSCRIPTION:(.*)/);
+
+    if (!match) {
+      return;
+    }
+
+
+    let query =
+      match[1].trim();
+
+
+    if (!query) {
+
+      this.sendSocketNotification(
+        'STATUS',
+        'ERROR'
+      );
+
+      return;
+    }
+
+
+    /*
+     * CORREGIR TRANSCRIPCIÓN
+     */
+
+    query =
+      this.correctTranscription(query);
+
+
+    console.log(
+      '[MMM-TuAsistente] Transcripción corregida:',
+      query
+    );
+
+
+    /*
+     * Mostrar pregunta
+     */
+
+    this.sendSocketNotification(
+      'USER_QUERY',
+      query
+    );
+
+
+    this.isThinking = true;
+
+
+    this.sendSocketNotification(
+      'STATUS',
+      'Pensando...'
+    );
+
+
+    this.handleChat({
+      prompt: query
+    });
+  },
+
+
+  // ============================================================
+  // DETENER WAKEWORD
+  // ============================================================
+
+  stopWakeWordListener() {
+
+    if (
+      this.wakeWordProcess !== null
+    ) {
+
+      try {
+
+        this.wakeWordProcess.kill(
+          'SIGINT'
+        );
+
+      } catch (e) {}
+
+      this.wakeWordProcess = null;
+    }
+  },
+
+
+  // ============================================================
+  // SOCKET
+  // ============================================================
+
+  socketNotificationReceived(
+    notification,
+    payload
+  ) {
+
+    if (
+      notification === 'INIT_CONFIG'
+    ) {
+
+      this.config =
+        payload || {};
+
+      console.log(
+        '[MMM-TuAsistente] =========================================='
+      );
+
+      console.log(
+        '[MMM-TuAsistente] CONFIGURACIÓN'
+      );
+
+      console.log(
+        '[MMM-TuAsistente] Idioma:',
+        this.config.language || 'es'
+      );
+
+      console.log(
+        '[MMM-TuAsistente] Voz:',
+        this.config.voice || 'es_ES-davefx-medium'
+      );
+
+      console.log(
+        '[MMM-TuAsistente] Modo:',
+        this.config.activationMode || 'ptt'
+      );
+
+      console.log(
+        '[MMM-TuAsistente] Audio:',
+        'hw:0,0'
+      );
+
+      console.log(
+        '[MMM-TuAsistente] =========================================='
+      );
+
+
+      const mode =
+        this.config.activationMode ||
+        'ptt';
+
+
+      if (
+        mode === 'wakeword'
+      ) {
+
+        console.log(
+          '[MMM-TuAsistente] Modo VOZ'
+        );
+
+        this.startWakeWordListener();
+
+      } else {
+
+        console.log(
+          '[MMM-TuAsistente] Modo TECLA / PTT'
+        );
+
+        this.listenToKeyboard();
+      }
+    }
+
+
+    else if (
+      notification === 'STOP_LISTENER'
+    ) {
+
+      this.stopWakeWordListener();
+
+      if (this.keyListenerProcess) {
+
+        try {
+          this.keyListenerProcess.kill();
+        } catch (e) {}
+
+        this.keyListenerProcess = null;
+      }
+    }
+  },
+
+
+  // ============================================================
+  // DETECTAR SI NECESITA INTERNET
+  // ============================================================
+
+  needsWebSearch(prompt) {
+
+    const text =
+      prompt
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '');
+
+    const patterns = [
+
+      'quien es',
+      'quien fue',
+
+      'que paso',
+      'que ha pasado',
+      'que pasa',
+      'que esta pasando',
+
+      'cuando',
+      'donde',
+
+      'cuanto',
+      'cuantos',
+      'cuantas',
+
+      'hoy',
+      'ahora',
+      'actualmente',
+      'actualidad',
+
+      'ultima hora',
+      'ultimas noticias',
+      'noticias',
+
+      'ultima noticia',
+      'ultimas novedades',
+      'novedades',
+
+      'resultado',
+      'resultados',
+
+      'partido',
+      'partidos',
+      'futbol',
+      'liga',
+      'champions',
+
+      'tiempo',
+      'clima',
+      'temperatura',
+
+      'precio',
+      'precios',
+      'cotizacion',
+
+      'quien gano',
+      'quien ganara',
+
+      'donde juega',
+      'en que equipo juega',
+
+      'biografia',
+
+      /*
+       * PERSONAS / EQUIPOS
+       */
+
+      'lamine yamal',
+      'real madrid',
+      'barcelona',
+      'atletico de madrid',
+
+      /*
+       * BÚSQUEDA EXPLÍCITA
+       */
+
+      'busca en internet',
+      'busca en la web',
+      'buscame',
+      'busca',
+      'informacion sobre'
+    ];
+
+    return patterns.some(
+      pattern =>
+        text.includes(pattern)
+    );
+  },
+
+
+  // ============================================================
+  // BÚSQUEDA WEB
+  // ============================================================
+
+  buscarWeb(query) {
+
+    return new Promise(
+      (resolve) => {
+
+        const cleanQuery =
+          query
+            .replace(/["'`$\\]/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+
+        if (!cleanQuery) {
+
+          resolve([]);
+
+          return;
+        }
+
+        console.log(
+          '[MMM-TuAsistente] Buscando en Internet:',
+          cleanQuery
+        );
+
+        const encoded =
+          encodeURIComponent(cleanQuery);
+
+        const command =
+          `curl -L --max-time 12 -A "Mozilla/5.0" ` +
+          `"https://html.duckduckgo.com/html/?q=${encoded}"`;
+
+        exec(
+          command,
+          {
+            maxBuffer: 1024 * 1024 * 3
+          },
+          (error, stdout) => {
+
+            if (error) {
+
+              console.error(
+                '[MMM-TuAsistente] Error búsqueda web:',
+                error.message
+              );
+
+              resolve([]);
+
+              return;
+            }
+
+            const results =
+              this.parseDuckDuckGo(stdout);
+
+            console.log(
+              `[MMM-TuAsistente] Resultados encontrados: ${results.length}`
+            );
+
+            resolve(
+              results.slice(0, 5)
+            );
+          }
+        );
+      }
+    );
+  },
+
+
+  // ============================================================
+  // PARSER DUCKDUCKGO
+  // ============================================================
+
+  parseDuckDuckGo(html) {
+
+    const results = [];
+
+    if (!html) {
+      return results;
+    }
+
+    const blocks =
+      html.split(
+        /class="result results_links/
+      );
+
+    for (
+      let i = 1;
+      i < blocks.length;
+      i++
+    ) {
+
+      const block =
+        blocks[i];
+
+      const titleMatch =
+        block.match(
+          /class="result__a"[^>]*>([\s\S]*?)<\/a>/
+        );
+
+      const snippetMatch =
+        block.match(
+          /class="result__snippet"[^>]*>([\s\S]*?)<\/a>/
+        ) ||
+        block.match(
+          /class="result__snippet"[^>]*>([\s\S]*?)<\/div>/
+        );
+
+      if (!titleMatch) {
+        continue;
+      }
+
+      let title =
+        this.decodeHtml(
+          titleMatch[1]
+        );
+
+      let snippet =
+        snippetMatch
+          ? this.decodeHtml(
+              snippetMatch[1]
+            )
+          : '';
+
+      title =
+        this.cleanHtml(title);
+
+      snippet =
+        this.cleanHtml(snippet);
+
+      if (
+        title &&
+        !results.some(
+          r => r.title === title
+        )
+      ) {
+
+        results.push({
+          title,
+          snippet
+        });
+      }
+
+      if (results.length >= 5) {
+        break;
+      }
+    }
+
+    return results;
+  },
+
+
+  decodeHtml(text) {
+
+    return text
+      .replace(/&amp;/g, '&')
+      .replace(/&quot;/g, '"')
+      .replace(/&#x27;/g, "'")
+      .replace(/&#39;/g, "'")
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&nbsp;/g, ' ');
+  },
+
+
+  cleanHtml(text) {
+
+    return text
+      .replace(/<[^>]*>/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  },
+
+
+  // ============================================================
+  // YOUTUBE
+  // ============================================================
+
+  buscarYouTube(query, callback) {
+
+    const ytDlpBin =
+      path.join(
+        __dirname,
+        'venv',
+        'bin',
+        'yt-dlp'
+      );
+
+    const cmd =
+      `"${ytDlpBin}" ` +
+      `"ytsearch1:${query}" ` +
+      `--get-id --no-warnings`;
+
+    exec(
+      cmd,
+      (error, stdout) => {
+
+        if (
+          error ||
+          !stdout.trim()
+        ) {
+
+          console.error(
+            '[MMM-TuAsistente] Error YouTube:',
+            error
+              ? error.message
+              : 'sin resultados'
+          );
+
+          callback(null);
+
+        } else {
+
+          callback(
+            stdout.trim().split('\n')[0]
+          );
+        }
+      }
+    );
+  },
+
+
+  // ============================================================
+  // CHAT PRINCIPAL
+  // ============================================================
+
+  async handleChat({ prompt }) {
+
+    prompt =
+      this.correctTranscription(prompt);
+
+
+    const lowerPrompt =
+      prompt
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '');
+
+
+    // ==========================================================
+    // DETENER YOUTUBE
+    // ==========================================================
+
+    if (
+      lowerPrompt.includes('quita el video') ||
+      lowerPrompt.includes('cierra youtube') ||
+      lowerPrompt.includes('para el video')
+    ) {
+
+      this.sendSocketNotification(
+        'STOP_YOUTUBE'
+      );
+
+      const text =
+        'Vídeo cerrado.';
+
+      this.sendSocketNotification(
+        'ASSISTANT_RESPONSE',
+        text
+      );
+
+      this.speakText(text);
+
+      this.isThinking = false;
+
+      return;
+    }
+
+
+    // ==========================================================
+    // YOUTUBE
+    // ==========================================================
+
+    if (
+      lowerPrompt.includes('pon ') ||
+      lowerPrompt.includes('reproduce ') ||
+      lowerPrompt.includes('video ') ||
+      lowerPrompt.includes('youtube')
+    ) {
+
+      let busqueda =
+        prompt
+          .replace(/pon /gi, '')
+          .replace(/reproduce /gi, '')
+          .replace(/un video de /gi, '')
+          .replace(/el video de /gi, '')
+          .replace(/video de /gi, '')
+          .replace(/en youtube/gi, '')
+          .replace(/youtube/gi, '')
+          .trim();
+
+      if (
+        busqueda.length > 0
+      ) {
+
+        const mensaje =
+          `Poniendo vídeo de ${busqueda}.`;
+
+        this.sendSocketNotification(
+          'ASSISTANT_RESPONSE',
+          mensaje
+        );
+
+        /*
+         * UNA SOLA LOCUCIÓN
+         */
+
+        this.speakText(
+          mensaje
+        );
+
+        this.buscarYouTube(
+          busqueda,
+          (videoId) => {
+
+            if (videoId) {
+
+              this.sendSocketNotification(
+                'PLAY_YOUTUBE',
+                {
+                  videoId
+                }
+              );
+
+            } else {
+
+              const errorText =
+                'No pude encontrar ese vídeo en YouTube.';
+
+              this.sendSocketNotification(
+                'ASSISTANT_RESPONSE',
+                errorText
+              );
+
+              this.speakText(
+                errorText
+              );
+
+              this.sendSocketNotification(
+                'STATUS',
+                'ERROR'
+              );
+            }
+          }
+        );
+
+        this.isThinking = false;
+
+        return;
+      }
+    }
+
+
+    // ==========================================================
+    // BÚSQUEDA WEB
+    // ==========================================================
+
+    let webResults = [];
+
+
+    if (
+      this.needsWebSearch(prompt)
+    ) {
+
+      this.sendSocketNotification(
+        'STATUS',
+        'Buscando...'
+      );
+
+      webResults =
+        await this.buscarWeb(prompt);
+
+
+      console.log(
+        '[MMM-TuAsistente] Resultados web:',
+        webResults.length
+      );
+
+
+      /*
+       * ENVIAR RESULTADOS A LA PANTALLA
+       */
+
+      this.sendSocketNotification(
+        'WEB_RESULTS',
+        webResults
+      );
+    }
+
+
+    // ==========================================================
+    // OLLAMA
+    // ==========================================================
+
+    try {
+
+      const modelName =
+        this.config.model ||
+        'qwen2.5:1.5b';
+
+
+      let userPrompt =
+        prompt;
+
+
+      if (
+        webResults.length > 0
+      ) {
+
+        const webContext =
+          webResults
+            .map(
+              (result, index) =>
+                `Fuente ${index + 1}: ` +
+                `${result.title}. ` +
+                `${result.snippet}`
+            )
+            .join('\n');
+
+
+        userPrompt =
+          `Pregunta del usuario:\n${prompt}\n\n` +
+          `Información encontrada en Internet:\n` +
+          `${webContext}\n\n` +
+          `Responde usando esta información. ` +
+          `No inventes datos. ` +
+          `Si la información no es suficiente, dilo. ` +
+          `Responde en español, de forma breve y natural.`;
+      }
+
+
+      console.log(
+        '[MMM-TuAsistente] Pregunta a Ollama:',
+        prompt
+      );
+
+
+      const responseStream =
+        await this.ollama.chat({
+
+          model: modelName,
+
+          messages: [
+            {
+              role: 'system',
+              content: this.systemPrompt
+            },
+            {
+              role: 'user',
+              content: userPrompt
+            }
+          ],
+
+          stream: true,
+
+          options: {
+            num_ctx: 2048,
+            num_predict: 120,
+            num_thread: 6,
+            temperature: 0.7
+          }
+        });
+
+
+      let fullResponse = '';
+
+
+      for await (
+        const chunk of responseStream
+      ) {
+
+        const content =
+          chunk.message?.content || '';
+
+        if (!content) {
+          continue;
+        }
+
+        fullResponse += content;
+      }
+
+
+      fullResponse =
+        fullResponse
+          .replace(/\*\*/g, '')
+          .replace(/\*/g, '')
+          .replace(/```/g, '')
+          .replace(/["'$`]/g, '')
+          .replace(/\s+/g, ' ')
+          .trim();
+
+
+      if (!fullResponse) {
+
+        fullResponse =
+          'No he podido obtener una respuesta.';
+      }
+
+
+      console.log(
+        '[MMM-TuAsistente] Respuesta:',
+        fullResponse
+      );
+
+
+      /*
+       * MOSTRAR RESPUESTA
+       */
+
+      this.sendSocketNotification(
+        'ASSISTANT_RESPONSE',
+        fullResponse
+      );
+
+
+      /*
+       * HABLAR UNA SOLA VEZ
+       */
+
+      this.isThinking = false;
+
+      this.isSpeaking = true;
+
+      this.speakText(
+        fullResponse
+      );
+
+
+      this.sendSocketNotification(
+        'STATUS',
+        'Hablando...'
+      );
+
+
+    } catch (err) {
+
+      console.error(
+        '[MMM-TuAsistente] Error en Ollama:',
+        err
+      );
+
+
+      this.isThinking = false;
+
+
+      const errorText =
+        'Lo siento, ha ocurrido un error.';
+
+
+      this.sendSocketNotification(
+        'ASSISTANT_RESPONSE',
+        errorText
+      );
+
+
+      this.speakText(
+        errorText
+      );
+
+
+      this.sendSocketNotification(
+        'STATUS',
+        'ERROR'
+      );
+    }
+  },
+
+
+  // ============================================================
+  // PIPER + ES8323
+  // ============================================================
+
+  speakText(text) {
+
+  if (!text || !text.trim()) {
+    return;
+  }
+
+  // Si ya hay audio reproduciéndose, detenerlo
+  if (this.isSpeaking) {
+    this.stopAudio();
+  }
+
+  const piperBin = path.join(
+    __dirname,
+    'piper_tts',
+    'piper',
+    'piper'
+  );
+
+  const configuredVoice =
+    this.config.voice || 'es_ES-davefx-medium';
+
+  const modelPath = path.join(
+    __dirname,
+    'piper_tts',
+    `${configuredVoice}.onnx`
+  );
+
+  if (!fs.existsSync(piperBin)) {
+    console.error(
+      '[MMM-TuAsistente] No existe Piper:',
+      piperBin
+    );
+    return;
+  }
+
+  if (!fs.existsSync(modelPath)) {
+    console.error(
+      '[MMM-TuAsistente] No existe modelo de voz:',
+      modelPath
+    );
+    return;
+  }
+
+  console.log(
+    '[MMM-TuAsistente] ?? Reproduciendo por ES8323 hw:0,0'
+  );
+
+  this.isSpeaking = true;
+
+  /*
+   * ==========================================================
+   * PIPER
+   * ==========================================================
+   *
+   * Piper genera:
+   *
+   * 22050 Hz
+   * S16_LE
+   * MONO
+   *
+   * ==========================================================
+   */
+
+  const piper = spawn(
+    piperBin,
+    [
+      '--model',
+      modelPath,
+      '--output-raw'
+    ],
+    {
+      stdio: [
+        'pipe',
+        'pipe',
+        'pipe'
+      ]
+    }
+  );
+
+  /*
+   * ==========================================================
+   * FFMPEG
+   * ==========================================================
+   *
+   * Convertimos:
+   *
+   * 22050 Hz mono
+   *
+   * ?
+   *
+   * 48000 Hz estéreo
+   *
+   * ==========================================================
+   */
+
+  const ffmpeg = spawn(
+    'ffmpeg',
+    [
+      '-f',
+      's16le',
+
+      '-ar',
+      '22050',
+
+      '-ac',
+      '1',
+
+      '-i',
+      'pipe:0',
+
+      '-ar',
+      '48000',
+
+      '-ac',
+      '2',
+
+      '-f',
+      's16le',
+
+      'pipe:1'
+    ],
+    {
+      stdio: [
+        'pipe',
+        'pipe',
+        'pipe'
+      ]
+    }
+  );
+
+  /*
+   * ==========================================================
+   * APLAY
+   * ==========================================================
+   *
+   * ES8323:
+   *
+   * hw:0,0
+   * 48000 Hz
+   * S16_LE
+   * 2 canales
+   *
+   * ==========================================================
+   */
+
+  const aplay = spawn(
+    'aplay',
+    [
+      '-D',
+      'hw:0,0',
+
+      '-r',
+      '48000',
+
+      '-f',
+      'S16_LE',
+
+      '-c',
+      '2',
+
+      '-t',
+      'raw'
+    ],
+    {
+      stdio: [
+        'pipe',
+        'ignore',
+        'pipe'
+      ]
+    }
+  );
+
+  this.audioProcesses.push(
+    piper,
+    ffmpeg,
+    aplay
+  );
+
+  /*
+   * ==========================================================
+   * CADENA DE AUDIO
+   * ==========================================================
+   *
+   * Piper
+   *   ?
+   * FFmpeg
+   *   ?
+   * Aplay
+   *   ?
+   * ES8323
+   *
+   * ==========================================================
+   */
+
+  piper.stdout.pipe(
+    ffmpeg.stdin
+  );
+
+  ffmpeg.stdout.pipe(
+    aplay.stdin
+  );
+
+  /*
+   * ==========================================================
+   * ERRORES PIPER
+   * ==========================================================
+   */
+  /*
+   * ==========================================================
+   * FFMPEG
+   * ==========================================================
+   *
+   * Piper:
+   * 22050 Hz / mono / S16_LE
+   *
+   * Convertimos a:
+   * 48000 Hz / estéreo / S16_LE
+   *
+   * Y generamos WAV temporal.
+   * ==========================================================
+   */
+
+  const wavFile = '/tmp/mmm-tu-asistente.wav';
+
+  const ffmpeg = spawn(
+    'ffmpeg',
+    [
+      '-y',
+
+      '-f',
+      's16le',
+
+      '-ar',
+      '22050',
+
+      '-ac',
+      '1',
+
+      '-i',
+      'pipe:0',
+
+      '-ar',
+      '48000',
+
+      '-ac',
+      '2',
+
+      '-c:a',
+      'pcm_s16le',
+
+      wavFile
+    ],
+    {
+      stdio: [
+        'pipe',
+        'ignore',
+        'pipe'
+      ]
+    }
+  );
+
+  this.audioProcesses.push(
+    piper,
+    ffmpeg
+  );
+
+  /*
+   * ==========================================================
+   * CADENA PIPER ? FFMPEG
+   * ==========================================================
+   */
+
+  piper.stdout.pipe(
+    ffmpeg.stdin
+  );
+
+  /*
+   * ==========================================================
+   * REPRODUCCIÓN DEL WAV
+   * ==========================================================
+   */
+
+  ffmpeg.on(
+    'close',
+    (code) => {
+
+      if (code !== 0) {
+
+        console.error(
+          '[MMM-TuAsistente] FFmpeg terminó con código:',
+          code
+        );
+
+        this.isSpeaking = false;
+
+        return;
+      }
+
+      console.log(
+        '[MMM-TuAsistente] Reproduciendo WAV por ES8323'
+      );
+
+      const aplay = spawn(
+        'aplay',
+        [
+          '-D',
+          'plughw:0,0',
+
+          wavFile
+        ],
+        {
+          stdio: [
+            'ignore',
+            'ignore',
+            'pipe'
+          ]
+        }
+      );
+
+      this.audioProcesses.push(aplay);
+
+      aplay.stderr.on(
+        'data',
+        (data) => {
+
+          const msg =
+            data.toString().trim();
+
+          if (msg) {
+
+            console.error(
+              '[MMM-TuAsistente] aplay:',
+              msg
+            );
+          }
+        }
+      );
+
+      aplay.on(
+        'close',
+        () => {
+
+          console.log(
+            '[MMM-TuAsistente] Reproducción terminada.'
+          );
+
+          this.isSpeaking = false;
+
+          this.audioProcesses =
+            this.audioProcesses.filter(
+              process => process !== aplay
+            );
+
+        }
+      );
+
+      aplay.on(
+        'error',
+        (error) => {
+
+          console.error(
+            '[MMM-TuAsistente] Error aplay:',
+            error
+          );
+
+          this.isSpeaking = false;
+        }
+      );
+    }
+  );
