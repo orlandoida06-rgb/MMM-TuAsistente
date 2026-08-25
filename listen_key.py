@@ -15,22 +15,34 @@ transcribe_script = os.path.join(BASE_DIR, "transcribe.py")
 
 def find_keyboard():
 
-    for device_path in evdev.list_devices():
+    configured = '/dev/input/by-id/usb-Logitech_USB_Keyboard-event-kbd'
 
-        try:
-            dev = evdev.InputDevice(device_path)
-            capabilities = dev.capabilities()
+    if configured != "null":
 
-            if ecodes.EV_KEY not in capabilities:
+        import os
+
+        if os.path.exists(configured):
+            return configured
+
+    try:
+
+        for device_path in evdev.list_devices():
+
+            try:
+
+                dev = evdev.InputDevice(device_path)
+
+                if "keyboard" in dev.name.lower():
+
+                    return dev.path
+
+            except Exception:
+
                 continue
 
-            keys = capabilities[ecodes.EV_KEY]
+    except Exception:
 
-            if ecodes.KEY_SPACE in keys:
-                return dev.path
-
-        except Exception:
-            continue
+        pass
 
     return None
 

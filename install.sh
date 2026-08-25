@@ -1,27 +1,12 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # ==============================================================================
-# MMM-TuAsistente
-# INSTALADOR COMPLETO
-#
-# Configura automáticamente:
-#   - Idioma
-#   - Voz Piper
-#   - PTT / Wake Word
-#   - Teclado y tecla PTT
-#   - Entrada de audio
-#   - Salida de audio
-#   - Whisper
-#   - OpenWakeWord
-#   - Piper
-#   - transcribe.py
-#   - listen_key.py
-#   - wakeword_listener.py
-#   - node_helper.js
-#   - config.js
+# MMM-TuAsistente - INSTALADOR COMPLETO
+# Ubuntu 24.04 / Raspberry Pi / Orange Pi / ARM64 / x86_64
 # ==============================================================================
 
 set -u
+set -o pipefail
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -31,160 +16,126 @@ CYAN='\033[0;36m'
 NC='\033[0m'
 
 TITLE="MMM-TuAsistente - Instalación"
-
 BASE_DIR="$(cd "$(dirname "$0")" && pwd)"
 
-# ==============================================================================
-# COMPROBAR MÓDULO
-# ==============================================================================
+echo
+echo -e "${GREEN}====================================================${NC}"
+echo -e "${GREEN}          MMM-TuAsistente - INSTALADOR${NC}"
+echo -e "${GREEN}====================================================${NC}"
+echo
 
 if [ ! -f "$BASE_DIR/node_helper.js" ]; then
-
-    echo -e "${RED}"
-    echo "ERROR: No se encuentra node_helper.js"
+    echo -e "${RED}[ERROR] No se encontró node_helper.js${NC}"
     echo
     echo "Ejecuta:"
-    echo
     echo "cd ~/MagicMirror/modules/MMM-TuAsistente"
     echo "./install.sh"
-    echo -e "${NC}"
-
     exit 1
 fi
 
-cd "$BASE_DIR"
-
-echo
-echo -e "${GREEN}"
-echo "===================================================="
-echo "       MMM-TuAsistente - INSTALADOR"
-echo "===================================================="
-echo -e "${NC}"
-
-echo "Directorio:"
+echo -e "${GREEN}[OK] Módulo encontrado:${NC}"
 echo "$BASE_DIR"
 echo
 
 # ==============================================================================
-# GUI / TUI
+# INTERFAZ
 # ==============================================================================
 
 USE_GUI=false
 
 if [ "${1:-}" = "--gui" ]; then
-
     USE_GUI=true
-
 elif [ "${1:-}" = "--tui" ]; then
-
     USE_GUI=false
-
 elif [ -n "${DISPLAY:-}" ]; then
-
     USE_GUI=true
-
 fi
 
 # ==============================================================================
-# INSTALAR INTERFAZ
+# INTERFAZ
 # ==============================================================================
 
 if [ "$USE_GUI" = true ]; then
 
     if ! command -v zenity >/dev/null 2>&1; then
-
-        echo -e "${YELLOW}Instalando Zenity...${NC}"
-
+        echo "[INFO] Instalando zenity..."
         sudo apt-get update -qq
-        sudo apt-get install -y zenity >/dev/null 2>&1
-
+        sudo apt-get install -y zenity
     fi
 
 else
 
     if ! command -v whiptail >/dev/null 2>&1; then
-
-        echo -e "${YELLOW}Instalando Whiptail...${NC}"
-
+        echo "[INFO] Instalando whiptail..."
         sudo apt-get update -qq
-        sudo apt-get install -y whiptail >/dev/null 2>&1
-
+        sudo apt-get install -y whiptail
     fi
 
 fi
 
 # ==============================================================================
-# FUNCIONES
+# FUNCIONES AUXILIARES
 # ==============================================================================
 
-cancel_install() {
-
+abort_install()
+{
     echo
-    echo -e "${RED}Instalación cancelada.${NC}"
-    echo
-
-    exit 0
+    echo -e "${RED}[ERROR] Instalación cancelada.${NC}"
+    deactivate 2>/dev/null || true
+    exit 1
 }
 
-
 # ==============================================================================
-# PREGUNTA INSTALAR
+# CONFIRMACIÓN
 # ==============================================================================
 
-confirm_install() {
+if [ "$USE_GUI" = true ]; then
 
-    if [ "$USE_GUI" = true ]; then
+    zenity --question \
+        --title="$TITLE" \
+        --text="¿Quieres instalar MMM-TuAsistente?" \
+        --width=500 \
+        2>/dev/null
 
-        zenity --question \
-            --title="$TITLE" \
-            --text="¿Quieres instalar MMM-TuAsistente?" \
-            --ok-label="Sí, instalar" \
-            --cancel-label="No, cancelar" \
-            --width=450 \
-            2>/dev/null
-
-        if [ $? -ne 0 ]; then
-            cancel_install
-        fi
-
-    else
-
-        if ! whiptail \
-            --title="$TITLE" \
-            --yesno \
-            "¿Quieres instalar MMM-TuAsistente?" \
-            10 65
-        then
-
-            cancel_install
-
-        fi
-
+    if [ $? -ne 0 ]; then
+        exit 0
     fi
-}
 
+else
+
+    if ! whiptail \
+        --title="$TITLE" \
+        --yesno \
+        "¿Quieres instalar MMM-TuAsistente?" \
+        10 60
+    then
+        exit 0
+    fi
+
+fi
 
 # ==============================================================================
 # IDIOMA
 # ==============================================================================
 
-select_language() {
+select_language()
+{
+    LANGUAGE="es"
 
     if [ "$USE_GUI" = true ]; then
 
         LANGUAGE=$(zenity --list \
             --title="$TITLE" \
-            --text="Selecciona el idioma del asistente:" \
+            --text="Selecciona el idioma:" \
             --column="ID" \
             --column="Idioma" \
-            --column="Código" \
-            "1" "Español" "es" \
-            "2" "English" "en" \
-            "3" "Français" "fr" \
-            "4" "Deutsch" "de" \
-            "5" "Italiano" "it" \
+            "es" "Español" \
+            "en" "English" \
+            "fr" "Français" \
+            "de" "Deutsch" \
+            "it" "Italiano" \
             --hide-column=1 \
-            --width=550 \
+            --width=500 \
             --height=350 \
             2>/dev/null)
 
@@ -193,7 +144,7 @@ select_language() {
         LANGUAGE=$(whiptail \
             --title="$TITLE" \
             --menu \
-            "Selecciona el idioma del asistente:" \
+            "Selecciona el idioma:" \
             16 70 5 \
             "es" "Español" \
             "en" "English" \
@@ -204,30 +155,16 @@ select_language() {
 
     fi
 
-    case "$LANGUAGE" in
-
-        "Español") LANGUAGE="es" ;;
-        "English") LANGUAGE="en" ;;
-        "Français") LANGUAGE="fr" ;;
-        "Deutsch") LANGUAGE="de" ;;
-        "Italiano") LANGUAGE="it" ;;
-
-        es|en|fr|de|it)
-            ;;
-
-        *)
-            cancel_install
-            ;;
-
-    esac
+    [ -n "${LANGUAGE:-}" ] || exit 1
 }
 
-
 # ==============================================================================
-# VOZ PIPER
+# VOZ
 # ==============================================================================
 
-select_voice() {
+select_voice()
+{
+    VOICE=""
 
     case "$LANGUAGE" in
 
@@ -240,11 +177,10 @@ select_voice() {
                     --text="Selecciona la voz Piper:" \
                     --column="ID" \
                     --column="Voz" \
-                    --column="Descripción" \
-                    "es_ES-davefx-medium" "DaveFX" "Voz española masculina" \
-                    "es_ES-sharvard-medium" "Sharvard" "Voz española" \
+                    "es_ES-davefx-medium" "DaveFX - Español" \
+                    "es_ES-sharvard-medium" "Sharvard - Español" \
                     --hide-column=1 \
-                    --width=650 \
+                    --width=600 \
                     --height=300 \
                     2>/dev/null)
 
@@ -255,57 +191,64 @@ select_voice() {
                     --menu \
                     "Selecciona la voz Piper:" \
                     15 75 2 \
-                    "es_ES-davefx-medium" "DaveFX - Voz española masculina" \
-                    "es_ES-sharvard-medium" "Sharvard - Voz española" \
+                    "es_ES-davefx-medium" "DaveFX - Español" \
+                    "es_ES-sharvard-medium" "Sharvard - Español" \
                     3>&1 1>&2 2>&3)
 
             fi
             ;;
 
         en)
-
             VOICE="en_US-lessac-medium"
             ;;
 
         fr)
-
             VOICE="fr_FR-upmc-medium"
             ;;
 
         de)
-
             VOICE="de_DE-thorsten-medium"
             ;;
 
         it)
-
             VOICE="it_IT-riccardo-x_low"
+            ;;
+
+        *)
+            echo -e "${RED}[ERROR] Idioma no soportado: $LANGUAGE${NC}"
+            exit 1
             ;;
 
     esac
 
     if [ -z "${VOICE:-}" ]; then
-        cancel_install
+        echo -e "${RED}[ERROR] No se seleccionó ninguna voz.${NC}"
+        exit 1
     fi
+
+    export VOICE
+
+    echo -e "${GREEN}[OK] Voz seleccionada: $VOICE${NC}"
 }
 
-
 # ==============================================================================
-# MODO ACTIVACIÓN
+# MODO
 # ==============================================================================
 
-select_activation_mode() {
+select_mode()
+{
+    MODE_CHOICE=""
 
     if [ "$USE_GUI" = true ]; then
 
         MODE_CHOICE=$(zenity --list \
             --title="$TITLE" \
-            --text="Selecciona el método de activación:" \
+            --text="Selecciona el modo de activación:" \
             --column="ID" \
-            --column="Método" \
+            --column="Modo" \
             --column="Descripción" \
-            "ptt" "PTT" "Mantener pulsada una tecla" \
-            "wakeword" "Wake Word" "Activación mediante Hey Mycroft" \
+            "ptt" "PTT" "Pulsar una tecla" \
+            "wakeword" "Wake Word" "Hey Mycroft" \
             --hide-column=1 \
             --width=700 \
             --height=300 \
@@ -316,1681 +259,1001 @@ select_activation_mode() {
         MODE_CHOICE=$(whiptail \
             --title="$TITLE" \
             --menu \
-            "Selecciona el método de activación:" \
+            "Selecciona el modo de activación:" \
             15 75 2 \
-            "ptt" "PTT - Tecla" \
+            "ptt" "PTT - Pulsar una tecla" \
             "wakeword" "Wake Word - Hey Mycroft" \
             3>&1 1>&2 2>&3)
 
     fi
 
-    if [ -z "${MODE_CHOICE:-}" ]; then
-        cancel_install
-    fi
+    [ -n "${MODE_CHOICE:-}" ] || exit 1
 }
 
-
 # ==============================================================================
-# DETECTAR TECLADOS
+# TECLADO
 # ==============================================================================
 
-detect_keyboards() {
-
+detect_keyboards()
+{
     KEYBOARD_PATHS=()
     KEYBOARD_NAMES=()
 
-    for device in /dev/input/event*; do
-
-        [ -e "$device" ] || continue
-
-        name=$(udevadm info --query=property --name="$device" 2>/dev/null |
-            sed -n 's/^NAME=//p' |
-            tr -d '"')
-
-        if [ -z "$name" ]; then
-            name=$(cat "/sys/class/input/$(basename "$device")/device/name" 2>/dev/null || true)
-        fi
-
-        if [ -z "$name" ]; then
-            name="Dispositivo de entrada"
-        fi
-
-        if evtest "$device" 2>/dev/null | grep -q "KEY_SPACE"; then
-
-            KEYBOARD_PATHS+=("$device")
-            KEYBOARD_NAMES+=("$name")
-
-        fi
-
-    done
-}
-
-
-# ==============================================================================
-# SELECCIONAR TECLADO
-# ==============================================================================
-
-select_keyboard() {
-
-    echo -e "${BLUE}Detectando teclados...${NC}"
-
-    if ! command -v evtest >/dev/null 2>&1; then
-
-        sudo apt-get install -y evtest >/dev/null 2>&1
-
+    if [ ! -d /dev/input/by-id ]; then
+        return
     fi
 
+    while IFS= read -r link; do
+
+        [ -L "$link" ] || continue
+        [ -e "$link" ] || continue
+
+        target="$(readlink -f "$link")"
+
+        name="$(udevadm info \
+            --query=property \
+            --name="$target" 2>/dev/null |
+            sed -n 's/^ID_MODEL_FROM_DATABASE=//p' |
+            head -n1)"
+
+        if [ -z "$name" ]; then
+            name="$(basename "$link")"
+            name="${name%-event-kbd}"
+            name="${name#usb-}"
+            name="$(echo "$name" | tr '_' ' ')"
+        fi
+
+        KEYBOARD_PATHS+=("$link")
+        KEYBOARD_NAMES+=("$name")
+
+    done < <(
+        find /dev/input/by-id \
+            -maxdepth 1 \
+            -type l \
+            -name '*-event-kbd' \
+            2>/dev/null |
+        sort
+    )
+}
+
+select_keyboard()
+{
     detect_keyboards
 
-    if [ "${#KEYBOARD_PATHS[@]}" -eq 0 ]; then
+    COUNT=${#KEYBOARD_PATHS[@]}
 
-        echo -e "${RED}No se encontraron teclados.${NC}"
+    if [ "$COUNT" -eq 0 ]; then
+
         echo
-        echo "Se utilizará búsqueda automática."
+        echo -e "${RED}[ERROR] No se encontró ningún teclado físico.${NC}"
         echo
-
-        KEYBOARD_PATH="auto"
-
-    else
-
-        MENU_ARGS=()
-
-        for ((i=0; i<${#KEYBOARD_PATHS[@]}; i++)); do
-
-            MENU_ARGS+=(
-                "$((i+1))"
-                "${KEYBOARD_NAMES[$i]} - ${KEYBOARD_PATHS[$i]}"
-            )
-
-        done
-
-        if [ "$USE_GUI" = true ]; then
-
-            DATA=""
-
-            for ((i=0; i<${#KEYBOARD_PATHS[@]}; i++)); do
-
-                DATA+="\"$((i+1))\" \"${KEYBOARD_NAMES[$i]}\" \"${KEYBOARD_PATHS[$i]}\" "
-
-            done
-
-            KEYBOARD_CHOICE=$(eval "zenity --list \
-                --title=\"$TITLE\" \
-                --text=\"Selecciona el teclado PTT:\" \
-                --column=\"ID\" \
-                --column=\"Teclado\" \
-                --column=\"Dispositivo\" \
-                $DATA \
-                --hide-column=1 \
-                --width=750 \
-                --height=400 \
-                2>/dev/null")
-
-        else
-
-            KEYBOARD_CHOICE=$(whiptail \
-                --title="$TITLE" \
-                --menu \
-                "Selecciona el teclado PTT:" \
-                20 90 \
-                "${#KEYBOARD_PATHS[@]}" \
-                "${MENU_ARGS[@]}" \
-                3>&1 1>&2 2>&3)
-
-        fi
-
-        if [ -z "${KEYBOARD_CHOICE:-}" ]; then
-            cancel_install
-        fi
-
-        if [[ "$KEYBOARD_CHOICE" =~ ^[0-9]+$ ]]; then
-
-            INDEX=$((KEYBOARD_CHOICE - 1))
-
-            KEYBOARD_PATH="${KEYBOARD_PATHS[$INDEX]}"
-
-        else
-
-            KEYBOARD_PATH="$KEYBOARD_CHOICE"
-
-        fi
+        echo "Comprueba:"
+        echo
+        ls -l /dev/input/by-id/ 2>/dev/null || true
+        echo
+        exit 1
 
     fi
 
-    echo
-    echo -e "${GREEN}Teclado seleccionado:${NC}"
-    echo "$KEYBOARD_PATH"
-    echo
-}
+    if [ "$COUNT" -eq 1 ]; then
 
+        KEYBOARD_PATH="${KEYBOARD_PATHS[0]}"
+        KEYBOARD_NAME="${KEYBOARD_NAMES[0]}"
 
-# ==============================================================================
-# SELECCIONAR TECLA
-# ==============================================================================
+        echo -e "${GREEN}[OK] Teclado detectado:${NC}"
+        echo "$KEYBOARD_NAME"
+        echo "$KEYBOARD_PATH"
+        echo
 
-select_key() {
+        return
+    fi
 
-    KEY_OPTIONS=(
-        "57" "ESPACIO"
-        "28" "ENTER"
-        "29" "CTRL"
-        "56" "ALT"
-        "59" "F1"
-        "60" "F2"
-        "61" "F3"
-        "62" "F4"
-        "63" "F5"
-        "64" "F6"
-        "65" "F7"
-        "66" "F8"
-        "67" "F9"
-        "68" "F10"
-        "87" "F11"
-        "88" "F12"
-    )
+    MENU_ARGS=()
+
+    for ((i=0; i<COUNT; i++)); do
+        MENU_ARGS+=(
+            "$((i+1))"
+            "${KEYBOARD_NAMES[$i]}"
+        )
+    done
 
     if [ "$USE_GUI" = true ]; then
 
-        KEY_CHOICE=$(zenity --list \
+        KEYBOARD_CHOICE=$(zenity --list \
             --title="$TITLE" \
-            --text="Selecciona la tecla que utilizarás para hablar:" \
+            --text="Selecciona el teclado:" \
+            --column="ID" \
+            --column="Teclado" \
+            "${MENU_ARGS[@]}" \
+            --hide-column=1 \
+            --width=700 \
+            --height=400 \
+            2>/dev/null)
+
+    else
+
+        KEYBOARD_CHOICE=$(whiptail \
+            --title="$TITLE" \
+            --menu \
+            "Selecciona el teclado:" \
+            18 80 "$COUNT" \
+            "${MENU_ARGS[@]}" \
+            3>&1 1>&2 2>&3)
+
+    fi
+
+    [ -n "${KEYBOARD_CHOICE:-}" ] || exit 1
+
+    INDEX=$((KEYBOARD_CHOICE - 1))
+
+    KEYBOARD_PATH="${KEYBOARD_PATHS[$INDEX]}"
+    KEYBOARD_NAME="${KEYBOARD_NAMES[$INDEX]}"
+}
+
+# ==============================================================================
+# TECLA PTT
+# ==============================================================================
+
+select_ptt_key()
+{
+    KEY_CODES=(
+        KEY_SPACE
+        KEY_ENTER
+        KEY_F1
+        KEY_F2
+        KEY_F3
+        KEY_F4
+        KEY_F5
+        KEY_F6
+        KEY_F7
+        KEY_F8
+        KEY_F9
+        KEY_F10
+        KEY_F11
+        KEY_F12
+        KEY_ESC
+        KEY_TAB
+    )
+
+    KEY_NAMES=(
+        "SPACE"
+        "ENTER"
+        "F1"
+        "F2"
+        "F3"
+        "F4"
+        "F5"
+        "F6"
+        "F7"
+        "F8"
+        "F9"
+        "F10"
+        "F11"
+        "F12"
+        "ESC"
+        "TAB"
+    )
+
+    MENU_ARGS=()
+
+    for ((i=0; i<${#KEY_CODES[@]}; i++)); do
+        MENU_ARGS+=(
+            "${KEY_CODES[$i]}"
+            "${KEY_NAMES[$i]}"
+        )
+    done
+
+    if [ "$USE_GUI" = true ]; then
+
+        PTT_KEY=$(zenity --list \
+            --title="$TITLE" \
+            --text="Selecciona la tecla PTT:" \
             --column="Código" \
             --column="Tecla" \
-            "${KEY_OPTIONS[@]}" \
+            "${MENU_ARGS[@]}" \
             --width=500 \
             --height=500 \
             2>/dev/null)
 
     else
 
-        KEY_CHOICE=$(whiptail \
+        PTT_KEY=$(whiptail \
             --title="$TITLE" \
             --menu \
-            "Selecciona la tecla que utilizarás para hablar:" \
-            20 60 16 \
-            "${KEY_OPTIONS[@]}" \
+            "Selecciona la tecla PTT:" \
+            20 65 10 \
+            "${MENU_ARGS[@]}" \
             3>&1 1>&2 2>&3)
 
     fi
 
-    if [ -z "${KEY_CHOICE:-}" ]; then
-        cancel_install
-    fi
-
-    KEYBOARD_KEY="$KEY_CHOICE"
-
-    case "$KEYBOARD_KEY" in
-
-        57) KEYBOARD_KEY_NAME="ESPACIO" ;;
-        28) KEYBOARD_KEY_NAME="ENTER" ;;
-        29) KEYBOARD_KEY_NAME="CTRL" ;;
-        56) KEYBOARD_KEY_NAME="ALT" ;;
-        59) KEYBOARD_KEY_NAME="F1" ;;
-        60) KEYBOARD_KEY_NAME="F2" ;;
-        61) KEYBOARD_KEY_NAME="F3" ;;
-        62) KEYBOARD_KEY_NAME="F4" ;;
-        63) KEYBOARD_KEY_NAME="F5" ;;
-        64) KEYBOARD_KEY_NAME="F6" ;;
-        65) KEYBOARD_KEY_NAME="F7" ;;
-        66) KEYBOARD_KEY_NAME="F8" ;;
-        67) KEYBOARD_KEY_NAME="F9" ;;
-        68) KEYBOARD_KEY_NAME="F10" ;;
-        87) KEYBOARD_KEY_NAME="F11" ;;
-        88) KEYBOARD_KEY_NAME="F12" ;;
-
-        *) KEYBOARD_KEY_NAME="KEY_$KEYBOARD_KEY" ;;
-
-    esac
+    [ -n "${PTT_KEY:-}" ] || exit 1
 }
 
-
 # ==============================================================================
-# AUDIO - ENTRADA
+# AUDIO
 # ==============================================================================
 
-select_audio_input() {
+select_audio_devices()
+{
+    MIC_INDEX="null"
+    MIC_NAME="Sistema"
+    OUTPUT_DEVICE="default"
+    OUTPUT_NAME="Sistema"
 
-    echo -e "${BLUE}Detectando entradas de audio...${NC}"
+    echo
+    echo -e "${CYAN}====================================================${NC}"
+    echo -e "${CYAN} CONFIGURACIÓN DE AUDIO${NC}"
+    echo -e "${CYAN}====================================================${NC}"
+    echo
 
-    INPUT_IDS=()
-    INPUT_NAMES=()
+    # --------------------------------------------------------------------------
+    # MICRÓFONOS
+    # --------------------------------------------------------------------------
 
-    while IFS= read -r line; do
+    mapfile -t CAPTURE_LINES < <(
+        arecord -l 2>/dev/null |
+        sed -nE 's/^card ([0-9]+): .*device ([0-9]+):.*/\1|\2/p'
+    )
 
-        if [[ "$line" =~ ^card[[:space:]]+([0-9]+): ]]; then
+    if [ "${#CAPTURE_LINES[@]}" -eq 0 ]; then
 
-            CARD="${BASH_REMATCH[1]}"
-
-            NAME=$(echo "$line" |
-                sed -E 's/^card [0-9]+: ([^[]+).*/\1/' |
-                xargs)
-
-            INPUT_IDS+=("$CARD")
-            INPUT_NAMES+=("$NAME")
-
-        fi
-
-    done < <(arecord -l 2>/dev/null)
-
-    if [ "${#INPUT_IDS[@]}" -eq 0 ]; then
-
-        echo -e "${RED}No se encontraron entradas de audio.${NC}"
-        exit 1
-
-    fi
-
-    MENU_ARGS=()
-
-    for ((i=0; i<${#INPUT_IDS[@]}; i++)); do
-
-        MENU_ARGS+=(
-            "${INPUT_IDS[$i]}"
-            "${INPUT_NAMES[$i]}"
-        )
-
-    done
-
-    if [ "$USE_GUI" = true ]; then
-
-        INPUT_CHOICE=$(zenity --list \
-            --title="$TITLE" \
-            --text="Selecciona la entrada de audio:" \
-            --column="ID" \
-            --column="Dispositivo" \
-            "${MENU_ARGS[@]}" \
-            --width=700 \
-            --height=400 \
-            2>/dev/null)
+        echo -e "${YELLOW}[AVISO] No se detectaron micrófonos ALSA.${NC}"
 
     else
 
-        INPUT_CHOICE=$(whiptail \
-            --title="$TITLE" \
-            --menu \
-            "Selecciona la entrada de audio:" \
-            20 80 \
-            "${#INPUT_IDS[@]}" \
-            "${MENU_ARGS[@]}" \
-            3>&1 1>&2 2>&3)
+        MENU_ARGS=()
 
-    fi
+        for line in "${CAPTURE_LINES[@]}"; do
 
-    if [ -z "${INPUT_CHOICE:-}" ]; then
-        cancel_install
-    fi
+            IFS='|' read -r card device <<< "$line"
 
-    AUDIO_INPUT_CARD="$INPUT_CHOICE"
+            description="$(arecord -l 2>/dev/null |
+                grep "^card $card:" |
+                grep "device $device:" |
+                head -n1 |
+                sed -E 's/^card [0-9]+: (.*)$/\1/')"
 
-    for ((i=0; i<${#INPUT_IDS[@]}; i++)); do
+            [ -n "$description" ] || description="ALSA hw:${card},${device}"
 
-        if [ "${INPUT_IDS[$i]}" = "$INPUT_CHOICE" ]; then
+            MENU_ARGS+=(
+                "${card},${device}"
+                "$description"
+            )
 
-            AUDIO_INPUT_NAME="${INPUT_NAMES[$i]}"
+        done
 
-        fi
+        if [ "$USE_GUI" = true ]; then
 
-    done
-}
+            MIC_CHOICE=$(zenity --list \
+                --title="$TITLE" \
+                --text="Selecciona entrada de audio:" \
+                --column="ID" \
+                --column="Micrófono" \
+                "${MENU_ARGS[@]}" \
+                --hide-column=1 \
+                --width=800 \
+                --height=400 \
+                2>/dev/null)
 
+        else
 
-# ==============================================================================
-# AUDIO - SALIDA
-# ==============================================================================
-
-select_audio_output() {
-
-    echo -e "${BLUE}Detectando salidas de audio...${NC}"
-
-    OUTPUT_IDS=()
-    OUTPUT_NAMES=()
-
-    while IFS= read -r line; do
-
-        if [[ "$line" =~ ^card[[:space:]]+([0-9]+): ]]; then
-
-            CARD="${BASH_REMATCH[1]}"
-
-            NAME=$(echo "$line" |
-                sed -E 's/^card [0-9]+: ([^[]+).*/\1/' |
-                xargs)
-
-            OUTPUT_IDS+=("$CARD")
-            OUTPUT_NAMES+=("$NAME")
+            MIC_CHOICE=$(whiptail \
+                --title="$TITLE" \
+                --menu \
+                "Selecciona entrada de audio:" \
+                20 90 8 \
+                "${MENU_ARGS[@]}" \
+                3>&1 1>&2 2>&3)
 
         fi
 
-    done < <(aplay -l 2>/dev/null)
+        [ -n "${MIC_CHOICE:-}" ] || exit 1
 
-    if [ "${#OUTPUT_IDS[@]}" -eq 0 ]; then
+        MIC_CARD="${MIC_CHOICE%,*}"
+        MIC_DEVICE="${MIC_CHOICE#*,}"
 
-        echo -e "${RED}No se encontraron salidas de audio.${NC}"
-        exit 1
+        MIC_NAME="ALSA hw:${MIC_CARD},${MIC_DEVICE}"
+
+        # ----------------------------------------------------------------------
+        # Encontrar índice sounddevice
+        # ----------------------------------------------------------------------
+
+        MIC_INDEX="$(
+            "$BASE_DIR/venv/bin/python" - "$MIC_CARD" "$MIC_DEVICE" <<'PY'
+import sys
+
+card = sys.argv[1]
+dev = sys.argv[2]
+
+try:
+    import sounddevice as sd
+
+    devices = sd.query_devices()
+
+    wanted = [
+        f"hw:{card},{dev}",
+        f"plughw:{card},{dev}",
+    ]
+
+    for index, info in enumerate(devices):
+
+        name = str(info.get("name", ""))
+
+        if int(info.get("max_input_channels", 0)) <= 0:
+            continue
+
+        if any(x in name for x in wanted):
+            print(index)
+            sys.exit(0)
+
+    # Segundo intento: buscar por card/device
+    for index, info in enumerate(devices):
+
+        name = str(info.get("name", ""))
+
+        if int(info.get("max_input_channels", 0)) <= 0:
+            continue
+
+        if f"{card},{dev}" in name:
+            print(index)
+            sys.exit(0)
+
+    print("null")
+
+except Exception as e:
+    print("null")
+PY
+)"
+
+        [ -n "$MIC_INDEX" ] || MIC_INDEX="null"
 
     fi
 
-    MENU_ARGS=()
+    # --------------------------------------------------------------------------
+    # SALIDAS
+    # --------------------------------------------------------------------------
 
-    for ((i=0; i<${#OUTPUT_IDS[@]}; i++)); do
+    mapfile -t PLAYBACK_LINES < <(
+        aplay -l 2>/dev/null |
+        sed -nE 's/^card ([0-9]+): .*device ([0-9]+):.*/\1|\2/p'
+    )
 
-        MENU_ARGS+=(
-            "${OUTPUT_IDS[$i]}"
-            "${OUTPUT_NAMES[$i]}"
-        )
+    if [ "${#PLAYBACK_LINES[@]}" -eq 0 ]; then
 
-    done
-
-    if [ "$USE_GUI" = true ]; then
-
-        OUTPUT_CHOICE=$(zenity --list \
-            --title="$TITLE" \
-            --text="Selecciona la salida de audio:" \
-            --column="ID" \
-            --column="Dispositivo" \
-            "${MENU_ARGS[@]}" \
-            --width=700 \
-            --height=400 \
-            2>/dev/null)
+        echo -e "${YELLOW}[AVISO] No se detectaron salidas ALSA.${NC}"
 
     else
 
-        OUTPUT_CHOICE=$(whiptail \
-            --title="$TITLE" \
-            --menu \
-            "Selecciona la salida de audio:" \
-            20 80 \
-            "${#OUTPUT_IDS[@]}" \
-            "${MENU_ARGS[@]}" \
-            3>&1 1>&2 2>&3)
+        MENU_ARGS=()
 
-    fi
+        for line in "${PLAYBACK_LINES[@]}"; do
 
-    if [ -z "${OUTPUT_CHOICE:-}" ]; then
-        cancel_install
-    fi
+            IFS='|' read -r card device <<< "$line"
 
-    AUDIO_OUTPUT_CARD="$OUTPUT_CHOICE"
+            description="$(aplay -l 2>/dev/null |
+                grep "^card $card:" |
+                grep "device $device:" |
+                head -n1 |
+                sed -E 's/^card [0-9]+: (.*)$/\1/')"
 
-    for ((i=0; i<${#OUTPUT_IDS[@]}; i++)); do
+            [ -n "$description" ] || description="ALSA hw:${card},${device}"
 
-        if [ "${OUTPUT_IDS[$i]}" = "$OUTPUT_CHOICE" ]; then
+            MENU_ARGS+=(
+                "${card},${device}"
+                "$description"
+            )
 
-            AUDIO_OUTPUT_NAME="${OUTPUT_NAMES[$i]}"
+        done
+
+        if [ "$USE_GUI" = true ]; then
+
+            OUTPUT_CHOICE=$(zenity --list \
+                --title="$TITLE" \
+                --text="Selecciona salida de audio:" \
+                --column="ID" \
+                --column="Salida" \
+                "${MENU_ARGS[@]}" \
+                --hide-column=1 \
+                --width=800 \
+                --height=400 \
+                2>/dev/null)
+
+        else
+
+            OUTPUT_CHOICE=$(whiptail \
+                --title="$TITLE" \
+                --menu \
+                "Selecciona salida de audio:" \
+                20 90 8 \
+                "${MENU_ARGS[@]}" \
+                3>&1 1>&2 2>&3)
 
         fi
 
-    done
-}
+        [ -n "${OUTPUT_CHOICE:-}" ] || exit 1
 
+        OUTPUT_CARD="${OUTPUT_CHOICE%,*}"
+        OUTPUT_DEVICE_NUM="${OUTPUT_CHOICE#*,}"
 
-# ==============================================================================
-# RESUMEN DE SELECCIÓN
-# ==============================================================================
-
-show_selection() {
-
-    echo
-    echo -e "${CYAN}"
-    echo "===================================================="
-    echo " CONFIGURACIÓN SELECCIONADA"
-    echo "===================================================="
-    echo -e "${NC}"
-
-    echo "Idioma       : $LANGUAGE"
-    echo "Voz          : $VOICE"
-    echo "Activación   : $MODE_CHOICE"
-
-    if [ "$MODE_CHOICE" = "ptt" ]; then
-
-        echo "Teclado      : $KEYBOARD_PATH"
-        echo "Tecla        : $KEYBOARD_KEY_NAME ($KEYBOARD_KEY)"
-
-    fi
-
-    echo "Entrada      : [$AUDIO_INPUT_CARD] $AUDIO_INPUT_NAME"
-    echo "Salida       : [$AUDIO_OUTPUT_CARD] $AUDIO_OUTPUT_NAME"
-
-    echo
-}
-
-
-# ==============================================================================
-# BACKUPS
-# ==============================================================================
-
-backup_file() {
-
-    FILE="$1"
-
-    if [ -f "$FILE" ]; then
-
-        cp "$FILE" \
-            "$FILE.backup.$(date +%Y%m%d_%H%M%S)"
+        OUTPUT_DEVICE="plughw:${OUTPUT_CARD},${OUTPUT_DEVICE_NUM}"
+        OUTPUT_NAME="ALSA hw:${OUTPUT_CARD},${OUTPUT_DEVICE_NUM}"
 
     fi
 }
 
+# ==============================================================================
+# SELECCIONES
+# ==============================================================================
+
+select_language
+select_voice
+select_mode
+
+if [ "$MODE_CHOICE" = "ptt" ]; then
+    select_keyboard
+    select_ptt_key
+else
+    KEYBOARD_PATH="null"
+    KEYBOARD_NAME="No utilizado"
+    PTT_KEY="KEY_SPACE"
+fi
 
 # ==============================================================================
-# INSTALAR DEPENDENCIAS
+# DEPENDENCIAS
 # ==============================================================================
 
-install_dependencies() {
+echo
+echo -e "${BLUE}[1/8] Instalando dependencias del sistema...${NC}"
 
-    echo -e "${BLUE}[1/8] Instalando dependencias del sistema...${NC}"
+if ! sudo apt-get update; then
+    abort_install
+fi
 
-    sudo apt-get update -qq
+if ! sudo apt-get install -y \
+    python3-full \
+    python3-venv \
+    python3-pip \
+    python3-dev \
+    portaudio19-dev \
+    libasound2-dev \
+    ffmpeg \
+    git \
+    wget \
+    curl \
+    unzip \
+    build-essential \
+    libsndfile1 \
+    alsa-utils \
+    udev
+then
+    abort_install
+fi
 
-    sudo apt-get install -y \
-        python3-venv \
-        python3-pip \
-        python3-dev \
-        portaudio19-dev \
-        libasound2-dev \
-        alsa-utils \
-        evtest \
-        ffmpeg \
-        git \
-        wget \
-        curl \
-        unzip \
-        build-essential \
-        libsndfile1 \
-        libffi-dev \
-        >/dev/null 2>&1
+echo -e "${GREEN}[OK] Dependencias del sistema.${NC}"
 
-}
+# ==============================================================================
+# NODE
+# ==============================================================================
 
+echo
+echo -e "${BLUE}[2/8] Comprobando Node.js y npm...${NC}"
+
+if ! command -v node >/dev/null 2>&1; then
+
+    echo -e "${YELLOW}[INFO] Node.js no está instalado.${NC}"
+
+    if ! curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -; then
+        abort_install
+    fi
+
+    if ! sudo apt-get install -y nodejs; then
+        abort_install
+    fi
+
+fi
+
+if ! command -v node >/dev/null 2>&1; then
+    echo -e "${RED}[ERROR] Node.js no disponible.${NC}"
+    exit 1
+fi
+
+if ! command -v npm >/dev/null 2>&1; then
+    echo -e "${RED}[ERROR] npm no disponible.${NC}"
+    exit 1
+fi
+
+echo -e "${GREEN}[OK] Node: $(node --version)${NC}"
+echo -e "${GREEN}[OK] npm : $(npm --version)${NC}"
+
+# ==============================================================================
+# NODE DEPENDENCIES
+# ==============================================================================
+
+echo
+echo -e "${BLUE}[3/8] Instalando dependencias Node...${NC}"
+
+if ! npm install axios; then
+    echo -e "${RED}[ERROR] npm install axios falló.${NC}"
+    exit 1
+fi
+
+echo -e "${GREEN}[OK] Axios instalado.${NC}"
 
 # ==============================================================================
 # VENV
 # ==============================================================================
 
-install_venv() {
+echo
+echo -e "${BLUE}[4/8] Creando entorno Python...${NC}"
 
-    echo -e "${BLUE}[2/8] Creando entorno Python...${NC}"
+if [ ! -d "$BASE_DIR/venv" ]; then
 
-    if [ ! -d "$BASE_DIR/venv" ]; then
-
-        python3 -m venv "$BASE_DIR/venv"
-
+    if ! python3 -m venv "$BASE_DIR/venv"; then
+        abort_install
     fi
 
-    source "$BASE_DIR/venv/bin/activate"
+fi
 
-    python -m pip install --upgrade \
-        pip \
-        setuptools \
-        wheel \
-        -q
+source "$BASE_DIR/venv/bin/activate"
 
-}
+python -m pip install --upgrade pip setuptools wheel -q
 
+echo -e "${GREEN}[OK] Entorno Python preparado.${NC}"
 
 # ==============================================================================
 # PYTHON
 # ==============================================================================
 
-install_python() {
+echo
+echo -e "${BLUE}[5/8] Instalando librerías Python...${NC}"
 
-    echo -e "${BLUE}[3/8] Instalando librerías Python...${NC}"
+if ! python -m pip install \
+    numpy \
+    requests \
+    ollama \
+    sounddevice \
+    faster-whisper \
+    evdev \
+    scipy \
+    -q
+then
+    abort_install
+fi
 
-    pip install \
-        numpy \
-        requests \
-        ollama \
-        sounddevice \
-        faster-whisper \
-        evdev \
-        -q
-
-}
-
+echo -e "${GREEN}[OK] Librerías Python instaladas.${NC}"
 
 # ==============================================================================
 # OPENWAKEWORD
 # ==============================================================================
 
-install_wakeword() {
+echo
+echo -e "${BLUE}[6/8] Configuración de activación...${NC}"
 
-    if [ "$MODE_CHOICE" = "wakeword" ]; then
+if [ "$MODE_CHOICE" = "wakeword" ]; then
 
-        echo -e "${BLUE}[4/8] Instalando OpenWakeWord...${NC}"
+    echo "[INFO] Instalando OpenWakeWord..."
 
-        pip install \
-            openwakeword \
-            pyaudio \
-            tflite-runtime \
-            -q
-
-    else
-
-        echo -e "${BLUE}[4/8] Modo PTT: OpenWakeWord no necesario.${NC}"
-
+    if ! python -m pip install \
+        openwakeword \
+        pyaudio \
+        tflite-runtime \
+        -q
+    then
+        echo -e "${RED}[ERROR] OpenWakeWord no se pudo instalar.${NC}"
+        deactivate 2>/dev/null || true
+        exit 1
     fi
-}
 
+    echo -e "${GREEN}[OK] OpenWakeWord instalado.${NC}"
+
+else
+
+    echo -e "${GREEN}[OK] PTT seleccionado.${NC}"
+
+fi
 
 # ==============================================================================
 # PIPER
 # ==============================================================================
 
-install_piper() {
+echo
+echo -e "${BLUE}[7/8] Preparando Piper TTS...${NC}"
 
-    echo -e "${BLUE}[5/8] Preparando Piper TTS...${NC}"
+# Seguridad: comprobar VOICE antes de usarla
+if [ -z "${VOICE:-}" ]; then
+    echo -e "${RED}[ERROR] VOICE está vacía.${NC}"
+    echo "LANGUAGE=$LANGUAGE"
+    exit 1
+fi
 
-    PIPER_DIR="$BASE_DIR/piper_tts"
+echo -e "${CYAN}[INFO] Voz seleccionada: $VOICE${NC}"
 
-    mkdir -p "$PIPER_DIR"
+PIPER_DIR="$BASE_DIR/piper_tts"
 
-    if [ ! -x "$PIPER_DIR/piper/piper" ]; then
+mkdir -p "$PIPER_DIR"
 
-        echo -e "${YELLOW}Descargando Piper...${NC}"
+if [ ! -x "$PIPER_DIR/piper/piper" ]; then
 
-        ARCH="$(uname -m)"
+    ARCH="$(uname -m)"
 
-        case "$ARCH" in
+    case "$ARCH" in
 
-            x86_64)
-                PIPER_ARCH="amd64"
-                ;;
-
-            aarch64|arm64)
-                PIPER_ARCH="arm64"
-                ;;
-
-            armv7l|armv7)
-                PIPER_ARCH="armv7"
-                ;;
-
-            *)
-                echo -e "${RED}Arquitectura no soportada: $ARCH${NC}"
-                exit 1
-                ;;
-
-        esac
-
-        PIPER_VERSION="2023.11.14-2"
-
-        PIPER_URL="https://github.com/rhasspy/piper/releases/download/${PIPER_VERSION}/piper_linux_${PIPER_ARCH}.tar.gz"
-
-        TEMP_PIPER="/tmp/piper_mmm.tar.gz"
-
-        wget -q --show-progress \
-            "$PIPER_URL" \
-            -O "$TEMP_PIPER"
-
-        if [ $? -ne 0 ]; then
-
-            echo -e "${RED}No se pudo descargar Piper.${NC}"
-            exit 1
-
-        fi
-
-        rm -rf "$PIPER_DIR/piper"
-
-        mkdir -p "$PIPER_DIR/piper"
-
-        tar -xzf "$TEMP_PIPER" \
-            -C "$PIPER_DIR/piper" \
-            --strip-components=1
-
-        rm -f "$TEMP_PIPER"
-
-    fi
-
-    chmod +x "$PIPER_DIR/piper/piper"
-
-
-    case "$VOICE" in
-
-        es_ES-davefx-medium)
-            VOICE_PATH="es/es_ES/davefx/medium"
+        x86_64)
+            PIPER_ARCH="amd64"
             ;;
 
-        es_ES-sharvard-medium)
-            VOICE_PATH="es/es_ES/sharvard/medium"
+        aarch64|arm64)
+            PIPER_ARCH="arm64"
             ;;
 
-        en_US-lessac-medium)
-            VOICE_PATH="en/en_US/lessac/medium"
-            ;;
-
-        fr_FR-upmc-medium)
-            VOICE_PATH="fr/fr_FR/upmc/medium"
-            ;;
-
-        de_DE-thorsten-medium)
-            VOICE_PATH="de/de_DE/thorsten/medium"
-            ;;
-
-        it_IT-riccardo-x_low)
-            VOICE_PATH="it/it_IT/riccardo/x_low"
+        armv7l|armv7)
+            PIPER_ARCH="armv7"
             ;;
 
         *)
-            echo -e "${RED}Voz no soportada: $VOICE${NC}"
+            echo -e "${RED}[ERROR] Arquitectura no soportada: $ARCH${NC}"
+            deactivate
             exit 1
             ;;
 
     esac
 
+    PIPER_VERSION="2023.11.14-2"
 
-    VOICE_URL="https://huggingface.co/rhasspy/piper-voices/resolve/main/${VOICE_PATH}/${VOICE}.onnx"
+    PIPER_URL="https://github.com/rhasspy/piper/releases/download/${PIPER_VERSION}/piper_linux_${PIPER_ARCH}.tar.gz"
 
-    VOICE_JSON_URL="https://huggingface.co/rhasspy/piper-voices/resolve/main/${VOICE_PATH}/${VOICE}.onnx.json"
+    TEMP_PIPER="/tmp/piper_mmm_tuasistente.tar.gz"
 
+    echo "[INFO] Descargando Piper..."
 
-    if [ ! -f "$PIPER_DIR/${VOICE}.onnx" ]; then
-
-        echo -e "${YELLOW}Descargando voz Piper: $VOICE${NC}"
-
-        wget -q --show-progress \
-            "$VOICE_URL" \
-            -O "$PIPER_DIR/${VOICE}.onnx"
-
-    fi
-
-
-    if [ ! -f "$PIPER_DIR/${VOICE}.onnx.json" ]; then
-
-        wget -q --show-progress \
-            "$VOICE_JSON_URL" \
-            -O "$PIPER_DIR/${VOICE}.onnx.json"
-
-    fi
-
-
-    if [ ! -s "$PIPER_DIR/${VOICE}.onnx" ]; then
-
-        echo -e "${RED}El modelo Piper no se descargó correctamente.${NC}"
+    if ! wget -q --show-progress "$PIPER_URL" -O "$TEMP_PIPER"; then
+        echo -e "${RED}[ERROR] No se pudo descargar Piper.${NC}"
+        deactivate
         exit 1
-
     fi
-}
 
+    rm -rf "$PIPER_DIR/piper"
+    mkdir -p "$PIPER_DIR/piper"
+
+    if ! tar -xzf "$TEMP_PIPER" \
+        -C "$PIPER_DIR/piper" \
+        --strip-components=1
+    then
+        echo -e "${RED}[ERROR] No se pudo extraer Piper.${NC}"
+        rm -f "$TEMP_PIPER"
+        deactivate
+        exit 1
+    fi
+
+    rm -f "$TEMP_PIPER"
+
+fi
+
+chmod +x "$PIPER_DIR/piper/piper" 2>/dev/null || true
 
 # ==============================================================================
-# GENERAR TRANSCRIBE.PY
+# MODELO PIPER
 # ==============================================================================
 
-write_transcribe() {
+case "$VOICE" in
 
-    echo -e "${BLUE}[6/8] Configurando transcripción y micrófono...${NC}"
+    es_ES-davefx-medium)
+        VOICE_PATH="es/es_ES/davefx/medium"
+        ;;
 
-    backup_file "$BASE_DIR/transcribe.py"
+    es_ES-sharvard-medium)
+        VOICE_PATH="es/es_ES/sharvard/medium"
+        ;;
 
-    cat > "$BASE_DIR/transcribe.py" <<PYTHON
-# -*- coding: utf-8 -*-
+    en_US-lessac-medium)
+        VOICE_PATH="en/en_US/lessac/medium"
+        ;;
 
-import os
-import sys
+    fr_FR-upmc-medium)
+        VOICE_PATH="fr/fr_FR/upmc/medium"
+        ;;
 
-os.environ["OMP_NUM_THREADS"] = "2"
-os.environ["OPENBLAS_NUM_THREADS"] = "2"
-os.environ["MKL_NUM_THREADS"] = "2"
+    de_DE-thorsten-medium)
+        VOICE_PATH="de/de_DE/thorsten/medium"
+        ;;
 
-import sounddevice as sd
-import numpy as np
-from faster_whisper import WhisperModel
+    it_IT-riccardo-x_low)
+        VOICE_PATH="it/it_IT/riccardo/x_low"
+        ;;
 
+    *)
+        echo -e "${RED}[ERROR] Voz no soportada: '$VOICE'${NC}"
+        deactivate
+        exit 1
+        ;;
 
-SAMPLE_RATE = 16000
-CHANNELS = 1
-BLOCKSIZE = 1024
+esac
 
-# Configurado automáticamente por install.sh
-DEVICE_INDEX = ${AUDIO_INPUT_CARD}
+VOICE_URL="https://huggingface.co/rhasspy/piper-voices/resolve/main/${VOICE_PATH}/${VOICE}.onnx"
+VOICE_JSON_URL="https://huggingface.co/rhasspy/piper-voices/resolve/main/${VOICE_PATH}/${VOICE}.onnx.json"
 
-is_recording = False
-audio_buffer = []
+if [ ! -s "$PIPER_DIR/${VOICE}.onnx" ]; then
 
+    echo "[INFO] Descargando modelo $VOICE..."
 
-print("[transcribe] Loading Whisper...", flush=True)
+    if ! wget -q --show-progress \
+        "$VOICE_URL" \
+        -O "$PIPER_DIR/${VOICE}.onnx"
+    then
+        echo -e "${RED}[ERROR] No se pudo descargar el modelo Piper.${NC}"
+        deactivate
+        exit 1
+    fi
 
-try:
+fi
 
-    model = WhisperModel(
-        "base",
-        device="cpu",
-        compute_type="int8",
-        cpu_threads=2,
-        num_workers=1
-    )
+if [ ! -s "$PIPER_DIR/${VOICE}.onnx.json" ]; then
 
-except Exception as e:
+    echo "[INFO] Descargando configuración de voz..."
 
-    print(
-        f"ERROR loading Whisper: {e}",
-        flush=True
-    )
+    if ! wget -q --show-progress \
+        "$VOICE_JSON_URL" \
+        -O "$PIPER_DIR/${VOICE}.onnx.json"
+    then
+        echo -e "${RED}[ERROR] No se pudo descargar la configuración Piper.${NC}"
+        deactivate
+        exit 1
+    fi
 
-    sys.exit(1)
+fi
 
-
-print("[transcribe] Whisper ready.", flush=True)
-
-
-def callback(indata, frames, time_info, status):
-
-    global is_recording
-
-    if status:
-
-        print(
-            f"[audio] {status}",
-            file=sys.stderr,
-            flush=True
-        )
-
-    if is_recording:
-
-        audio_buffer.append(indata.copy())
-
-
-try:
-
-    stream = sd.InputStream(
-        samplerate=SAMPLE_RATE,
-        channels=CHANNELS,
-        dtype="float32",
-        blocksize=BLOCKSIZE,
-        device=DEVICE_INDEX,
-        callback=callback
-    )
-
-    stream.start()
-
-except Exception as e:
-
-    print(
-        f"ERROR opening microphone: {e}",
-        flush=True
-    )
-
-    sys.exit(1)
-
-
-print(
-    "[transcribe] Microphone ready.",
-    flush=True
-)
-
-
-def transcribe_audio():
-
-    global audio_buffer
-
-    if not audio_buffer:
-
-        print(
-            "TRANSCRIPTION:",
-            flush=True
-        )
-
-        return
-
-
-    audio_data = np.concatenate(
-        audio_buffer,
-        axis=0
-    ).flatten()
-
-
-    audio_buffer.clear()
-
-
-    try:
-
-        segments, info = model.transcribe(
-            audio_data,
-            language="${LANGUAGE}",
-            beam_size=1,
-            best_of=1,
-            temperature=0,
-            vad_filter=True
-        )
-
-
-        text = " ".join(
-            segment.text
-            for segment in segments
-        ).strip()
-
-
-        print(
-            f"TRANSCRIPTION:{text}",
-            flush=True
-        )
-
-
-    except Exception as e:
-
-        print(
-            f"ERROR transcription: {e}",
-            flush=True
-        )
-
-
-try:
-
-    for line in sys.stdin:
-
-        command = line.strip()
-
-
-        if command == "START":
-
-            audio_buffer.clear()
-
-            is_recording = True
-
-            print(
-                "RECORDING_STARTED",
-                flush=True
-            )
-
-
-        elif command == "STOP":
-
-            is_recording = False
-
-            print(
-                "RECORDING_STOPPED",
-                flush=True
-            )
-
-            transcribe_audio()
-
-
-except KeyboardInterrupt:
-
-    pass
-
-
-except Exception as e:
-
-    print(
-        f"ERROR main loop: {e}",
-        flush=True
-    )
-
-
-finally:
-
-    is_recording = False
-
-    try:
-
-        stream.stop()
-        stream.close()
-
-    except Exception:
-
-        pass
-
-
-    print(
-        "[transcribe] Stopped.",
-        flush=True
-    )
-PYTHON
-
-    chmod +x "$BASE_DIR/transcribe.py"
-}
-
+echo -e "${GREEN}[OK] Voz Piper preparada: $VOICE${NC}"
 
 # ==============================================================================
-# GENERAR LISTEN_KEY.PY
+# AHORA SELECCIONAMOS AUDIO
+# IMPORTANTE: SE HACE DESPUÉS DE CREAR EL VENV
 # ==============================================================================
 
-write_listener() {
-
-    echo -e "${BLUE}Configurando PTT...${NC}"
-
-    backup_file "$BASE_DIR/listen_key.py"
-
-    cat > "$BASE_DIR/listen_key.py" <<PYTHON
-# -*- coding: utf-8 -*-
-
-import evdev
-from evdev import InputDevice, ecodes
-import sys
-import subprocess
-import os
-import threading
-
-
-BASE_DIR = os.path.dirname(
-    os.path.abspath(__file__)
-)
-
-python_bin = os.path.join(
-    BASE_DIR,
-    "venv",
-    "bin",
-    "python"
-)
-
-transcribe_script = os.path.join(
-    BASE_DIR,
-    "transcribe.py"
-)
-
-
-KEYBOARD_PATH = "${KEYBOARD_PATH}"
-KEYBOARD_KEY = ${KEYBOARD_KEY}
-
-
-if KEYBOARD_PATH == "auto":
-
-    for device_path in evdev.list_devices():
-
-        try:
-
-            dev = InputDevice(device_path)
-
-            capabilities = dev.capabilities()
-
-            if ecodes.EV_KEY not in capabilities:
-                continue
-
-            keys = capabilities[ecodes.EV_KEY]
-
-            if KEYBOARD_KEY in keys:
-
-                KEYBOARD_PATH = dev.path
-                break
-
-        except Exception:
-
-            continue
-
-
-if not KEYBOARD_PATH or KEYBOARD_PATH == "auto":
-
-    print(
-        "ERROR: No se encontró el teclado configurado.",
-        flush=True
-    )
-
-    sys.exit(1)
-
-
-print(
-    f"[MMM-TuAsistente] Keyboard: {KEYBOARD_PATH}",
-    flush=True
-)
-
-print(
-    f"[MMM-TuAsistente] Key: {KEYBOARD_KEY}",
-    flush=True
-)
-
-
-try:
-
-    keyboard = InputDevice(
-        KEYBOARD_PATH
-    )
-
-except Exception as e:
-
-    print(
-        f"ERROR opening keyboard: {e}",
-        flush=True
-    )
-
-    sys.exit(1)
-
-
-if not os.path.exists(python_bin):
-
-    print(
-        f"ERROR: Python not found: {python_bin}",
-        flush=True
-    )
-
-    sys.exit(1)
-
-
-if not os.path.exists(transcribe_script):
-
-    print(
-        f"ERROR: transcribe.py not found: {transcribe_script}",
-        flush=True
-    )
-
-    sys.exit(1)
-
-
-try:
-
-    transcribe_proc = subprocess.Popen(
-        [
-            python_bin,
-            transcribe_script
-        ],
-        stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        bufsize=1
-    )
-
-except Exception as e:
-
-    print(
-        f"ERROR starting transcribe.py: {e}",
-        flush=True
-    )
-
-    sys.exit(1)
-
-
-def read_output():
-
-    try:
-
-        for line in transcribe_proc.stdout:
-
-            print(
-                line,
-                end="",
-                flush=True
-            )
-
-    except Exception as e:
-
-        print(
-            f"ERROR reading transcribe.py: {e}",
-            flush=True
-        )
-
-
-def read_errors():
-
-    try:
-
-        for line in transcribe_proc.stderr:
-
-            print(
-                f"[transcribe ERROR] {line}",
-                end="",
-                flush=True
-            )
-
-    except Exception as e:
-
-        print(
-            f"ERROR reading stderr: {e}",
-            flush=True
-        )
-
-
-threading.Thread(
-    target=read_output,
-    daemon=True
-).start()
-
-
-threading.Thread(
-    target=read_errors,
-    daemon=True
-).start()
-
-
-def send_command(command):
-
-    if transcribe_proc.poll() is not None:
-
-        print(
-            f"ERROR: transcribe.py stopped: "
-            f"{transcribe_proc.returncode}",
-            flush=True
-        )
-
-        return
-
-
-    try:
-
-        transcribe_proc.stdin.write(
-            command + "\n"
-        )
-
-        transcribe_proc.stdin.flush()
-
-    except Exception as e:
-
-        print(
-            f"ERROR sending command: {e}",
-            flush=True
-        )
-
-
-is_pressed = False
-
-
-print(
-    "[MMM-TuAsistente] PTT listo.",
-    flush=True
-)
-
-
-try:
-
-    for event in keyboard.read_loop():
-
-        if event.type != ecodes.EV_KEY:
-            continue
-
-
-        if event.value == 2:
-            continue
-
-
-        if event.code != KEYBOARD_KEY:
-            continue
-
-
-        if event.value == 1:
-
-            if not is_pressed:
-
-                is_pressed = True
-
-                print(
-                    "RECORD_START",
-                    flush=True
-                )
-
-                send_command(
-                    "START"
-                )
-
-
-        elif event.value == 0:
-
-            if is_pressed:
-
-                is_pressed = False
-
-                print(
-                    "RECORD_STOP",
-                    flush=True
-                )
-
-                send_command(
-                    "STOP"
-                )
-
-
-except KeyboardInterrupt:
-
-    pass
-
-
-except Exception as e:
-
-    print(
-        f"ERROR keyboard loop: {e}",
-        flush=True
-    )
-
-
-finally:
-
-    try:
-
-        if transcribe_proc.poll() is None:
-
-            transcribe_proc.terminate()
-
-            try:
-
-                transcribe_proc.wait(
-                    timeout=2
-                )
-
-            except subprocess.TimeoutExpired:
-
-                transcribe_proc.kill()
-
-    except Exception:
-
-        pass
-PYTHON
-
-    chmod +x "$BASE_DIR/listen_key.py"
-}
-
+select_audio_devices
 
 # ==============================================================================
-# GENERAR WAKEWORD LISTENER
+# CONFIGURAR LISTEN_KEY.PY
 # ==============================================================================
 
-write_wakeword() {
+echo
+echo -e "${BLUE}[8/8] Configurando archivos del asistente...${NC}"
 
-    echo -e "${BLUE}Configurando Wake Word...${NC}"
+if [ "$MODE_CHOICE" = "ptt" ] && [ -f "$BASE_DIR/listen_key.py" ]; then
 
-    mkdir -p "$BASE_DIR/scripts"
+    cp "$BASE_DIR/listen_key.py" \
+       "$BASE_DIR/listen_key.py.backup.$(date +%Y%m%d_%H%M%S)" \
+       2>/dev/null || true
 
-    backup_file "$BASE_DIR/scripts/wakeword_listener.py"
+    "$BASE_DIR/venv/bin/python" - \
+        "$BASE_DIR/listen_key.py" \
+        "$KEYBOARD_PATH" \
+        "$PTT_KEY" <<'PY'
 
-    cat > "$BASE_DIR/scripts/wakeword_listener.py" <<PYTHON
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
-import sys
-import json
-
-sys.stdout.reconfigure(
-    encoding="utf-8",
-    line_buffering=True
-)
-
-try:
-
-    import numpy as np
-    import pyaudio
-
-    from openwakeword.model import Model
-
-except ImportError as err:
-
-    print(
-        json.dumps({
-            "status": "error",
-            "message": f"Librería no encontrada: {err}"
-        }),
-        flush=True
-    )
-
-    sys.exit(1)
-
-
-def send_json(data):
-
-    print(
-        json.dumps(data),
-        flush=True
-    )
-
-
-def main():
-
-    model_name = (
-        sys.argv[1]
-        if len(sys.argv) > 1
-        and sys.argv[1] != "null"
-        else "hey_mycroft"
-    )
-
-
-    try:
-
-        threshold = float(
-            sys.argv[2]
-        ) if len(sys.argv) > 2 else 0.5
-
-    except ValueError:
-
-        threshold = 0.5
-
-
-    mic_index = None
-
-
-    if len(sys.argv) > 3:
-
-        if sys.argv[3] not in [
-            "null",
-            "undefined",
-            "None"
-        ]:
-
-            try:
-
-                mic_index = int(
-                    sys.argv[3]
-                )
-
-            except ValueError:
-
-                mic_index = None
-
-
-    try:
-
-        oww_model = Model(
-            wakeword_models=[
-                model_name
-            ],
-            inference_framework="tflite"
-        )
-
-    except Exception:
-
-        try:
-
-            oww_model = Model(
-                wakeword_models=[
-                    model_name
-                ],
-                inference_framework="onnx"
-            )
-
-        except Exception as e:
-
-            send_json({
-                "status": "error",
-                "message":
-                    f"Error al cargar el modelo "
-                    f"'{model_name}': {str(e)}"
-            })
-
-            sys.exit(1)
-
-
-    FORMAT = pyaudio.paInt16
-    CHANNELS = 1
-    RATE = 16000
-    CHUNK = 1280
-
-
-    audio = pyaudio.PyAudio()
-
-
-    try:
-
-        stream = audio.open(
-            format=FORMAT,
-            channels=CHANNELS,
-            rate=RATE,
-            input=True,
-            input_device_index=mic_index,
-            frames_per_buffer=CHUNK
-        )
-
-    except Exception as err:
-
-        send_json({
-            "status": "error",
-            "message":
-                f"Error al abrir el micrófono "
-                f"(Índice: {mic_index}): {str(err)}"
-        })
-
-        audio.terminate()
-
-        sys.exit(1)
-
-
-    send_json({
-        "status": "ready",
-        "model": model_name,
-        "threshold": threshold,
-        "mic": mic_index
-    })
-
-
-    try:
-
-        while True:
-
-            raw_data = stream.read(
-                CHUNK,
-                exception_on_overflow=False
-            )
-
-
-            if not raw_data:
-                continue
-
-
-            audio_data = np.frombuffer(
-                raw_data,
-                dtype=np.int16
-            )
-
-
-            prediction = oww_model.predict(
-                audio_data
-            )
-
-
-            for wakeword_key, score in prediction.items():
-
-                if score >= threshold:
-
-                    send_json({
-                        "status": "detected",
-                        "wakeword": wakeword_key,
-                        "score": round(
-                            float(score),
-                            3
-                        )
-                    })
-
-                    oww_model.reset()
-
-
-    except KeyboardInterrupt:
-
-        pass
-
-
-    finally:
-
-        try:
-            stream.stop_stream()
-            stream.close()
-        except Exception:
-            pass
-
-        audio.terminate()
-
-
-if __name__ == "__main__":
-
-    main()
-PYTHON
-
-    chmod +x "$BASE_DIR/scripts/wakeword_listener.py"
-}
-
-
-# ==============================================================================
-# MODIFICAR NODE_HELPER.JS
-# ==============================================================================
-
-write_node_helper() {
-
-    echo -e "${BLUE}Configurando Node Helper y salida de audio...${NC}"
-
-    backup_file "$BASE_DIR/node_helper.js"
-
-    python3 - "$BASE_DIR/node_helper.js" "$VOICE" "$AUDIO_OUTPUT_CARD" <<'PY'
 import sys
 import re
 
 path = sys.argv[1]
-voice = sys.argv[2]
-output_card = sys.argv[3]
+keyboard = sys.argv[2]
+key = sys.argv[3]
 
 with open(path, "r", encoding="utf-8") as f:
     content = f.read()
 
-# Guardar voz/salida en defaults internos solamente como referencia.
-# La función speakText leerá this.config dinámicamente.
+replacement = f'''
+def find_keyboard():
+    configured = {keyboard!r}
 
-old = """const modelPath = path.join(__dirname, 'piper_tts', 'es_ES-davefx-medium.onnx');"""
+    if configured != "null":
+        import os
+        if os.path.exists(configured):
+            return configured
 
-new = """const selectedVoice = (this.config && this.config.voice)
-      ? this.config.voice
-      : 'es_ES-davefx-medium';
+    try:
+        for device_path in evdev.list_devices():
+            try:
+                dev = evdev.InputDevice(device_path)
+                if "keyboard" in dev.name.lower():
+                    return dev.path
+            except Exception:
+                continue
+    except Exception:
+        pass
 
-    const modelPath = path.join(
-      __dirname,
-      'piper_tts',
-      selectedVoice + '.onnx'
-    );"""
+    return None
 
-if old in content:
-    content = content.replace(old, new, 1)
+'''
 
-# Sustituir la línea aplay actual.
-old_aplay = """`aplay -r 22050 -f S16_LE -t raw`;"""
+pattern = r"def find_keyboard\(\):.*?(?=\n(?:def |if __name__|KEYBOARD_PATH))"
 
-new_aplay = """`aplay -D "plughw:${this.config && this.config.audioOutputCard !== undefined ? this.config.audioOutputCard : 0}" -r 22050 -f S16_LE -t raw`;"""
+new_content, count = re.sub(
+    pattern,
+    replacement,
+    content,
+    count=1,
+    flags=re.S
+)
 
-if old_aplay in content:
-    content = content.replace(old_aplay, new_aplay, 1)
+if count:
+    content = new_content
 
-# Si no encuentra exactamente la línea anterior, cambiar el fragmento.
-content = content.replace(
-    "`aplay -r 22050 -f S16_LE -t raw`",
-    "`aplay -D \\"plughw:${this.config && this.config.audioOutputCard !== undefined ? this.config.audioOutputCard : 0}\\" -r 22050 -f S16_LE -t raw`"
+content = re.sub(
+    r"ecodes\.KEY_[A-Z0-9_]+",
+    f"ecodes.{key}",
+    content,
+    count=1
 )
 
 with open(path, "w", encoding="utf-8") as f:
     f.write(content)
+
+print("[OK] listen_key.py configurado")
+
 PY
-}
 
+fi
 
 # ==============================================================================
-# CONFIGURAR CONFIG.JS
+# CONFIGURAR TRANSCRIBE.PY
 # ==============================================================================
 
-configure_magicmirror() {
+if [ -f "$BASE_DIR/transcribe.py" ]; then
 
-    echo -e "${BLUE}[8/8] Configurando MagicMirror...${NC}"
+    cp "$BASE_DIR/transcribe.py" \
+       "$BASE_DIR/transcribe.py.backup.$(date +%Y%m%d_%H%M%S)" \
+       2>/dev/null || true
 
-    CONFIG_PATH="$BASE_DIR/../../config/config.js"
+    "$BASE_DIR/venv/bin/python" - \
+        "$BASE_DIR/transcribe.py" \
+        "$MIC_INDEX" \
+        "$MIC_CARD" \
+        "$MIC_DEVICE" <<'PY'
 
-    if [ ! -f "$CONFIG_PATH" ]; then
+import sys
+import re
 
-        echo
-        echo -e "${YELLOW}No se encontró automáticamente:${NC}"
-        echo "$CONFIG_PATH"
-        echo
+path = sys.argv[1]
+device = sys.argv[2]
+card = sys.argv[3]
+dev = sys.argv[4]
 
-        return
+with open(path, "r", encoding="utf-8") as f:
+    content = f.read()
+
+# Preferir índice sounddevice si existe.
+# Si no existe, usar None y permitir que ALSA use el dispositivo por defecto.
+
+if device == "null":
+    replacement = "DEVICE_INDEX = None"
+else:
+    replacement = f"DEVICE_INDEX = {device}"
+
+content = re.sub(
+    r"DEVICE_INDEX\s*=\s*.*",
+    replacement,
+    content,
+    count=1
+)
+
+# Añadir información ALSA sin romper el archivo
+if "ALSA_DEVICE =" not in content:
+    content = content.replace(
+        "DEVICE_INDEX =",
+        f'ALSA_DEVICE = "hw:{card},{dev}"\nDEVICE_INDEX =',
+        1
+    )
+
+with open(path, "w", encoding="utf-8") as f:
+    f.write(content)
+
+print(
+    f"[OK] transcribe.py configurado: "
+    f"DEVICE_INDEX={device}, ALSA=hw:{card},{dev}"
+)
+
+PY
+
+fi
+
+# ==============================================================================
+# CONFIGURACIÓN WAKEWORD
+# ==============================================================================
+
+if [ "$MODE_CHOICE" = "wakeword" ]; then
+
+    if [ -f "$BASE_DIR/scripts/wakeword_listener.py" ]; then
+
+        cp "$BASE_DIR/scripts/wakeword_listener.py" \
+           "$BASE_DIR/scripts/wakeword_listener.py.backup.$(date +%Y%m%d_%H%M%S)" \
+           2>/dev/null || true
 
     fi
 
+fi
+
+# ==============================================================================
+# CONFIG.JS
+# ==============================================================================
+
+CONFIG_PATH="$BASE_DIR/../../config/config.js"
+
+echo
+echo -e "${CYAN}Configurando MagicMirror...${NC}"
+
+if [ -f "$CONFIG_PATH" ]; then
 
     ADD_CONFIG=false
-
 
     if [ "$USE_GUI" = true ]; then
 
         zenity --question \
             --title="$TITLE" \
-            --text="¿Quieres añadir MMM-TuAsistente automáticamente a config.js?" \
-            --ok-label="Sí" \
-            --cancel-label="No" \
-            --width=500 \
+            --text="¿Añadir MMM-TuAsistente automáticamente a config.js?" \
+            --width=550 \
             2>/dev/null
 
-        if [ $? -eq 0 ]; then
-            ADD_CONFIG=true
-        fi
+        [ $? -eq 0 ] && ADD_CONFIG=true
 
     else
 
         if whiptail \
             --title="$TITLE" \
             --yesno \
-            "¿Quieres añadir MMM-TuAsistente automáticamente a config.js?" \
-            10 65
+            "¿Añadir MMM-TuAsistente automáticamente a config.js?" \
+            10 70
         then
-
             ADD_CONFIG=true
-
         fi
 
     fi
 
+    if [ "$ADD_CONFIG" = true ]; then
 
-    if [ "$ADD_CONFIG" != true ]; then
-        return
-    fi
+        if grep -q 'module: "MMM-TuAsistente"' "$CONFIG_PATH"; then
 
+            echo -e "${YELLOW}[AVISO] MMM-TuAsistente ya está en config.js.${NC}"
 
-    backup_file "$CONFIG_PATH"
+        else
 
+            BACKUP="$CONFIG_PATH.backup.$(date +%Y%m%d_%H%M%S)"
+            cp "$CONFIG_PATH" "$BACKUP"
 
-    TEMP_CONFIG="/tmp/config_mmm_tuasistente.js"
+            TEMP_CONFIG="/tmp/config_mmm_tuasistente.js"
 
+            "$BASE_DIR/venv/bin/python" \
+                "$CONFIG_PATH" \
+                "$TEMP_CONFIG" \
+                "$LANGUAGE" \
+                "$VOICE" \
+                "$MODE_CHOICE" \
+                "$MIC_INDEX" \
+                "$KEYBOARD_PATH" \
+                "$PTT_KEY" \
+                "$OUTPUT_DEVICE" <<'PY'
 
-    python3 \
-        "$CONFIG_PATH" \
-        "$TEMP_CONFIG" \
-        "$LANGUAGE" \
-        "$VOICE" \
-        "$MODE_CHOICE" \
-        "$AUDIO_INPUT_CARD" \
-        "$AUDIO_INPUT_NAME" \
-        "$AUDIO_OUTPUT_CARD" \
-        "$AUDIO_OUTPUT_NAME" \
-        "$KEYBOARD_PATH" \
-        "$KEYBOARD_KEY" \
-        "$KEYBOARD_KEY_NAME" <<'PY'
 import sys
 
 config_path = sys.argv[1]
 output_path = sys.argv[2]
-
 language = sys.argv[3]
 voice = sys.argv[4]
 mode = sys.argv[5]
+mic = sys.argv[6]
+keyboard = sys.argv[7]
+ptt_key = sys.argv[8]
+output = sys.argv[9]
 
-input_card = sys.argv[6]
-input_name = sys.argv[7]
-
-output_card = sys.argv[8]
-output_name = sys.argv[9]
-
-keyboard_path = sys.argv[10]
-keyboard_key = sys.argv[11]
-keyboard_key_name = sys.argv[12]
-
-
-with open(
-    config_path,
-    "r",
-    encoding="utf-8"
-) as f:
-
+with open(config_path, "r", encoding="utf-8") as f:
     content = f.read()
 
+if mic == "null":
+    mic_js = "null"
+else:
+    mic_js = mic
 
-if "MMM-TuAsistente" in content:
-
-    print(
-        "MMM-TuAsistente ya existe en config.js"
-    )
-
-    sys.exit(2)
-
-
-keyboard_config = ""
-
-if mode == "ptt":
-
-    keyboard_config = f"""
-            keyboardDevice: "{keyboard_path}",
-            keyboardKey: {keyboard_key},
-            keyboardKeyName: "{keyboard_key_name}",
-"""
-
-
-block = f"""
+block = f'''
     {{
         module: "MMM-TuAsistente",
-
         position: "middle_center",
 
         config: {{
@@ -2001,38 +1264,33 @@ block = f"""
 
             voice: "{voice}",
 
-            micDeviceIndex: {input_card},
-
-            micDeviceName: "{input_name}",
-
-            audioOutputCard: {output_card},
-
-            audioOutputName: "{output_name}",
-
-{keyboard_config}
-
             wakeWordModel: "hey_mycroft",
 
             wakeWordThreshold: 0.5,
 
+            micDeviceIndex: {mic_js},
+
+            keyboardDevice: "{keyboard}",
+
+            pttKey: "{ptt_key}",
+
+            audioOutput: "{output}",
+
             model: "qwen2.5:1.5b",
 
-            hideDelay: 18000
+            hideDelay: 18000,
+
+            autoHideTimeout: 30000
+
         }}
     }},
-"""
-
+'''
 
 marker = "modules: ["
 
 if marker not in content:
-
-    print(
-        "ERROR: No se encontró 'modules: ['"
-    )
-
+    print("[ERROR] No se encontró modules: [")
     sys.exit(1)
-
 
 content = content.replace(
     marker,
@@ -2040,174 +1298,145 @@ content = content.replace(
     1
 )
 
-
-with open(
-    output_path,
-    "w",
-    encoding="utf-8"
-) as f:
-
+with open(output_path, "w", encoding="utf-8") as f:
     f.write(content)
+
+print("[OK] Configuración generada")
+
 PY
 
+            if [ -f "$TEMP_CONFIG" ] &&
+               grep -q 'MMM-TuAsistente' "$TEMP_CONFIG"
+            then
 
-    RESULT=$?
+                mv "$TEMP_CONFIG" "$CONFIG_PATH"
 
+                echo -e "${GREEN}[OK] config.js configurado.${NC}"
 
-    if [ "$RESULT" -eq 0 ]; then
+            else
 
-        mv "$TEMP_CONFIG" "$CONFIG_PATH"
+                echo -e "${RED}[ERROR] No se pudo modificar config.js.${NC}"
 
-        echo -e "${GREEN}[OK] MMM-TuAsistente añadido a config.js${NC}"
+            fi
 
-    elif [ "$RESULT" -eq 2 ]; then
-
-        rm -f "$TEMP_CONFIG"
-
-        echo -e "${YELLOW}[AVISO] MMM-TuAsistente ya estaba en config.js${NC}"
-
-    else
-
-        rm -f "$TEMP_CONFIG"
-
-        echo -e "${RED}[ERROR] No se pudo modificar config.js${NC}"
+        fi
 
     fi
-}
 
+else
+
+    echo -e "${YELLOW}[AVISO] No se encontró config.js:${NC}"
+    echo "$CONFIG_PATH"
+
+fi
 
 # ==============================================================================
 # PERMISOS
 # ==============================================================================
 
-set_permissions() {
+chmod +x "$BASE_DIR/install.sh" 2>/dev/null || true
+chmod +x "$BASE_DIR/listen_key.py" 2>/dev/null || true
+chmod +x "$BASE_DIR/transcribe.py" 2>/dev/null || true
 
-    chmod +x "$BASE_DIR/install.sh"
-    chmod +x "$BASE_DIR/listen_key.py"
-    chmod +x "$BASE_DIR/transcribe.py"
-    chmod +x "$BASE_DIR/scripts/wakeword_listener.py"
-
-}
-
-
-# ==============================================================================
-# RESUMEN FINAL
-# ==============================================================================
-
-final_message() {
-
-    echo
-
-    echo -e "${GREEN}"
-    echo "===================================================="
-    echo "       INSTALACIÓN COMPLETADA"
-    echo "===================================================="
-    echo -e "${NC}"
-
-    echo "Idioma        : $LANGUAGE"
-    echo "Voz Piper     : $VOICE"
-    echo "Activación    : $MODE_CHOICE"
-
-    if [ "$MODE_CHOICE" = "ptt" ]; then
-
-        echo "Teclado       : $KEYBOARD_PATH"
-        echo "Tecla         : $KEYBOARD_KEY_NAME ($KEYBOARD_KEY)"
-
-    fi
-
-    echo "Entrada audio : [$AUDIO_INPUT_CARD] $AUDIO_INPUT_NAME"
-    echo "Salida audio  : [$AUDIO_OUTPUT_CARD] $AUDIO_OUTPUT_NAME"
-
-    echo
-
-    echo -e "${GREEN}Piper:${NC}"
-    echo "$BASE_DIR/piper_tts/${VOICE}.onnx"
-
-    echo
-
-    if [ "$MODE_CHOICE" = "ptt" ]; then
-
-        echo -e "${CYAN}PTT:${NC}"
-        echo "Mantén pulsada la tecla $KEYBOARD_KEY_NAME para hablar."
-
-    else
-
-        echo -e "${CYAN}Wake Word:${NC}"
-        echo "Di: Hey Mycroft"
-
-    fi
-
-    echo
-
-    echo -e "${GREEN}Reinicia MagicMirror:${NC}"
-    echo
-    echo "pm2 restart mm"
-    echo
-
-}
-
-
-# ==============================================================================
-# EJECUCIÓN
-# ==============================================================================
-
-confirm_install
-
-select_language
-
-select_voice
-
-select_activation_mode
-
-
-# Teclado solamente para PTT
-if [ "$MODE_CHOICE" = "ptt" ]; then
-
-    select_keyboard
-    select_key
-
-else
-
-    KEYBOARD_PATH=""
-    KEYBOARD_KEY=""
-    KEYBOARD_KEY_NAME=""
-
+if [ -d "$BASE_DIR/scripts" ]; then
+    chmod +x "$BASE_DIR/scripts/"*.py 2>/dev/null || true
 fi
-
-
-# Audio SIEMPRE
-select_audio_input
-select_audio_output
-
-
-show_selection
-
-
-# Instalación
-install_dependencies
-
-install_venv
-
-install_python
-
-install_wakeword
-
-install_piper
-
-write_transcribe
-
-write_listener
-
-write_wakeword
-
-write_node_helper
-
-configure_magicmirror
-
-set_permissions
-
 
 deactivate 2>/dev/null || true
 
+# ==============================================================================
+# COMPROBACIONES
+# ==============================================================================
 
-final_message
+echo
+echo -e "${CYAN}====================================================${NC}"
+echo -e "${CYAN} COMPROBACIONES${NC}"
+echo -e "${CYAN}====================================================${NC}"
+
+if node --check "$BASE_DIR/node_helper.js"; then
+    echo -e "${GREEN}[OK] node_helper.js${NC}"
+else
+    echo -e "${RED}[ERROR] node_helper.js${NC}"
+fi
+
+if [ -f "$BASE_DIR/listen_key.py" ]; then
+
+    if "$BASE_DIR/venv/bin/python" -m py_compile \
+        "$BASE_DIR/listen_key.py" 2>/dev/null
+    then
+        echo -e "${GREEN}[OK] listen_key.py${NC}"
+    else
+        echo -e "${RED}[ERROR] listen_key.py${NC}"
+    fi
+
+fi
+
+if [ -f "$BASE_DIR/transcribe.py" ]; then
+
+    if "$BASE_DIR/venv/bin/python" -m py_compile \
+        "$BASE_DIR/transcribe.py" 2>/dev/null
+    then
+        echo -e "${GREEN}[OK] transcribe.py${NC}"
+    else
+        echo -e "${RED}[ERROR] transcribe.py${NC}"
+    fi
+
+fi
+
+if [ -x "$PIPER_DIR/piper/piper" ]; then
+    echo -e "${GREEN}[OK] Piper${NC}"
+else
+    echo -e "${RED}[ERROR] Piper${NC}"
+fi
+
+if [ "$MODE_CHOICE" = "ptt" ]; then
+
+    if [ -e "$KEYBOARD_PATH" ]; then
+        echo -e "${GREEN}[OK] Teclado PTT${NC}"
+        echo "     $KEYBOARD_PATH"
+    else
+        echo -e "${RED}[ERROR] Teclado PTT${NC}"
+    fi
+
+fi
+
+# ==============================================================================
+# RESUMEN
+# ==============================================================================
+
+echo
+echo -e "${GREEN}====================================================${NC}"
+echo -e "${GREEN}       INSTALACIÓN COMPLETADA${NC}"
+echo -e "${GREEN}====================================================${NC}"
+echo
+
+echo "Idioma        : $LANGUAGE"
+echo "Voz Piper     : $VOICE"
+echo "Activación    : $MODE_CHOICE"
+
+if [ "$MODE_CHOICE" = "ptt" ]; then
+    echo "Teclado       : $KEYBOARD_NAME"
+    echo "Dispositivo   : $KEYBOARD_PATH"
+    echo "Tecla PTT     : $PTT_KEY"
+fi
+
+echo "Entrada audio : $MIC_NAME"
+echo "Mic índice    : $MIC_INDEX"
+echo "Salida audio  : $OUTPUT_NAME"
+echo "Salida ALSA   : $OUTPUT_DEVICE"
+
+echo
+
+if [ "$MODE_CHOICE" = "ptt" ]; then
+    echo -e "${CYAN}PTT:${NC}"
+    echo "Pulsa $PTT_KEY para hablar."
+else
+    echo -e "${CYAN}Wake Word:${NC}"
+    echo "Di: Hey Mycroft"
+fi
+
+echo
+echo -e "${GREEN}Reinicia MagicMirror con:${NC}"
+echo
+echo "pm2 restart mm"
+echo

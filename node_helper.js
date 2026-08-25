@@ -9,8 +9,8 @@ const path = require('path');
 module.exports = NodeHelper.create({
   systemPrompt:
     'Eres Jarvis, un asistente de voz conciso para un espejo inteligente (MagicMirror). ' +
-    'Responde siempre en espa�ol, con oraciones breves, claras y sin usar formato Markdown o listas, ' +
-    'ya que las respuestas se leer�n en voz alta.',
+    'Responde siempre en espa�ol, con oraciones breves, claras y sin usar formato Markdown o listas, ' +
+    'ya que las respuestas se leer�n en voz alta.',
 
   async start() {
     console.log('[MMM-TuAsistente] Node helper iniciado.');
@@ -36,7 +36,7 @@ module.exports = NodeHelper.create({
   },
 
   // ==========================================
-  // OPCI�N 1: PTT / ESCUCHA POR TECLA O BOT�N
+  // OPCI�N 1: PTT / ESCUCHA POR TECLA O BOT�N
   // ==========================================
   listenToKeyboard() {
     if (this.keyListenerProcess !== null) return;
@@ -49,7 +49,7 @@ module.exports = NodeHelper.create({
       return;
     }
 
-    console.log('[MMM-TuAsistente] Iniciando servicio de activaci�n por Tecla/PTT...');
+    console.log('[MMM-TuAsistente] Iniciando servicio de activaci�n por Tecla/PTT...');
     this.keyListenerProcess = spawn(pythonExec, [listenerScript]);
 
     this.keyListenerProcess.stdout.on('data', (data) => {
@@ -62,7 +62,7 @@ module.exports = NodeHelper.create({
   },
 
   // ==========================================
-  // OPCI�N 2: ESCUCHA POR VOZ (OPENWAKEWORD)
+  // OPCI�N 2: ESCUCHA POR VOZ (OPENWAKEWORD)
   // ==========================================
   startWakeWordListener() {
     if (this.wakeWordProcess !== null) return;
@@ -92,9 +92,9 @@ module.exports = NodeHelper.create({
           const message = JSON.parse(line.trim());
 
           if (message.status === 'detected') {
-            console.log(`[MMM-TuAsistente] �Palabra clave detectada por voz!: ${message.wakeword}`);
+            console.log(`[MMM-TuAsistente] �Palabra clave detectada por voz!: ${message.wakeword}`);
 
-            // Si est� hablando o pensando, cancela la reproducci�n
+            // Si est� hablando o pensando, cancela la reproducci�n
             if (this.isSpeaking || this.isThinking) {
               this.stopAudio();
             }
@@ -102,7 +102,7 @@ module.exports = NodeHelper.create({
             this.sendSocketNotification('WAKEWORD_DETECTED', message);
             this.sendSocketNotification('STATUS', 'Grabando...');
 
-            // Disparar la grabaci�n de voz (STT) tras el Wake Word
+            // Disparar la grabaci�n de voz (STT) tras el Wake Word
             this.triggerVoiceRecording();
           }
         } catch (e) {
@@ -120,14 +120,14 @@ module.exports = NodeHelper.create({
     });
   },
 
-  // M�todo para procesar transcribir/grabar cuando se activa por Voz
+  // M�todo para procesar transcribir/grabar cuando se activa por Voz
   triggerVoiceRecording() {
     const pythonExec = path.join(__dirname, 'venv', 'bin', 'python3');
-    const recordScript = path.join(__dirname, 'listen_key.py'); // O tu script de grabaci�n STT
+    const recordScript = path.join(__dirname, 'listen_key.py'); // O tu script de grabaci�n STT
 
     if (!fs.existsSync(recordScript)) return;
 
-    // Ejecutamos una r�faga de grabaci�n
+    // Ejecutamos una r�faga de grabaci�n
     const recorder = spawn(pythonExec, [recordScript, '--once']);
 
     recorder.stdout.on('data', (data) => {
@@ -135,7 +135,7 @@ module.exports = NodeHelper.create({
     });
   },
 
-  // Procesador com�n para las salidas de texto transcrito (Servicio �nico para PTT y Voz)
+  // Procesador com�n para las salidas de texto transcrito (Servicio �nico para PTT y Voz)
   handleTranscriptionOutput(output) {
     if (output.includes('RECORD_START')) {
       if (this.isSpeaking || this.isThinking) {
@@ -176,7 +176,7 @@ module.exports = NodeHelper.create({
   },
 
   // ==========================================
-  // RECEPCI�N DE CONFIGURACI�N SEG�N LA INSTALACI�N
+  // RECEPCI�N DE CONFIGURACI�N SEG�N LA INSTALACI�N
   // ==========================================
   socketNotificationReceived(notification, payload) {
     if (notification === 'INIT_CONFIG') {
@@ -195,7 +195,334 @@ module.exports = NodeHelper.create({
       this.stopWakeWordListener();
     }
   },
+  // ==========================================
+  // BÚSQUEDA DE IMÁGENES
+  // ==========================================
+  async buscarImagen(query) {
+    try {
+      const axios = require('axios');
 
+      console.log(
+        `[MMM-TuAsistente] Buscando imágenes de: ${query}`
+      );
+
+      const url =
+        'https://www.bing.com/images/search?q=' +
+        encodeURIComponent(query);
+
+      const response = await axios.get(url, {
+        headers: {
+          'User-Agent':
+            'Mozilla/5.0 (X11; Linux aarch64) AppleWebKit/537.36 Chrome/120 Safari/537.36',
+          'Accept-Language':
+            'es-ES,es;q=0.9,en;q=0.8'
+        },
+        timeout: 15000
+      });
+
+      const html = response.data;
+
+      console.log(
+        `[MMM-TuAsistente] Bing respondió HTTP ${response.status}, HTML: ${html.length} bytes`
+      );
+
+      /*
+       * Bing devuelve los resultados dentro de bloques con:
+       *
+       * murl = URL de la imagen
+       * turl = thumbnail
+       * t   = título/contexto
+       *
+       * En vez de usar la primera imagen, recogemos varias.
+       */
+
+      const resultados = [];
+
+      const regex =
+        /<a[^>]+class="iusc"[^>]+m="([^"]+)"/gi;
+
+      let match;
+
+      while ((match = regex.exec(html)) !== null) {
+
+        try {
+
+          let data = match[1];
+
+          data = data
+            .replace(/&quot;/g, '"')
+            .replace(/&amp;/g, '&')
+            .replace(/\\u002f/g, '/')
+            .replace(/\\\//g, '/');
+
+          let obj;
+
+          try {
+            obj = JSON.parse(data);
+          } catch {
+            continue;
+          }
+
+          const imageUrl =
+            obj.murl ||
+            obj.turl ||
+            null;
+
+          const titulo =
+            obj.t ||
+            obj.purl ||
+            '';
+
+          if (!imageUrl) {
+            continue;
+          }
+
+          if (
+            !imageUrl.startsWith('http://') &&
+            !imageUrl.startsWith('https://')
+          ) {
+            continue;
+          }
+
+          resultados.push({
+            url: imageUrl,
+            titulo: String(titulo)
+          });
+
+        } catch {
+          continue;
+        }
+      }
+
+      /*
+       * Método alternativo si Bing cambia la estructura.
+       */
+
+      if (resultados.length === 0) {
+
+        const fallback =
+          /"murl":"(https?:\/\/[^"]+)"/gi;
+
+        while ((match = fallback.exec(html)) !== null) {
+
+          let imageUrl = match[1];
+
+          imageUrl = imageUrl
+            .replace(/\\u002f/g, '/')
+            .replace(/\\\//g, '/')
+            .replace(/&amp;/g, '&');
+
+          if (
+            imageUrl.startsWith('http://') ||
+            imageUrl.startsWith('https://')
+          ) {
+            resultados.push({
+              url: imageUrl,
+              titulo: ''
+            });
+          }
+        }
+      }
+
+      if (resultados.length === 0) {
+
+        console.error(
+          '[MMM-TuAsistente] Bing no devolvió ninguna imagen.'
+        );
+
+        return null;
+      }
+
+      /*
+       * =========================================================
+       * SELECCIÓN INTELIGENTE
+       * =========================================================
+       *
+       * Buscamos coincidencias entre la consulta y el contexto
+       * de cada resultado.
+       */
+
+      const palabras =
+        query
+          .toLowerCase()
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .split(/\s+/)
+          .filter(
+            palabra =>
+              palabra.length >= 3 &&
+              ![
+                'foto',
+                'fotos',
+                'imagen',
+                'imagenes',
+                'muestra',
+                'mostrar',
+                'muéstrame',
+                'ensename',
+                'busca',
+                'buscar'
+              ].includes(palabra)
+          );
+
+      let mejor = null;
+      let mejorPuntuacion = -1;
+
+      for (const resultado of resultados) {
+
+        const texto =
+          (
+            resultado.titulo +
+            ' ' +
+            resultado.url
+          )
+            .toLowerCase()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '');
+
+        let puntuacion = 0;
+
+        for (const palabra of palabras) {
+
+          if (texto.includes(palabra)) {
+            puntuacion += 10;
+          }
+        }
+
+        /*
+         * Penalizar URLs que claramente parecen irrelevantes.
+         */
+
+        const malas = [
+          'animalia.bio',
+          'hikingadventures.net',
+          'alpine-ibex',
+          'walmartimages.com'
+        ];
+
+        for (const mala of malas) {
+
+          if (texto.includes(mala)) {
+            puntuacion -= 20;
+          }
+        }
+
+        if (puntuacion > mejorPuntuacion) {
+
+          mejorPuntuacion = puntuacion;
+          mejor = resultado;
+        }
+      }
+
+      /*
+       * Si no hubo coincidencia textual, usamos el primer resultado,
+       * pero ahora mostramos información de depuración.
+       */
+
+      if (!mejor) {
+        mejor = resultados[0];
+      }
+
+      console.log(
+        `[MMM-TuAsistente] Resultados Bing analizados: ${resultados.length}`
+      );
+
+      console.log(
+        `[MMM-TuAsistente] Mejor resultado (${mejorPuntuacion}): ${mejor.url}`
+      );
+
+      return mejor.url;
+
+    } catch (error) {
+
+      console.error(
+        '[MMM-TuAsistente] Error buscando imagen:',
+        error.message
+      );
+
+      return null;
+    }
+  },
+
+  async buscarWeb(query) {
+    try {
+      const axios = require('axios');
+
+      console.log(`[MMM-TuAsistente] Buscando en Internet: ${query}`);
+
+      const url =
+        'https://html.duckduckgo.com/html/?q=' +
+        encodeURIComponent(query);
+
+      const response = await axios.get(url, {
+        headers: {
+          'User-Agent':
+            'Mozilla/5.0 (X11; Linux aarch64) AppleWebKit/537.36 Chrome/120 Safari/537.36'
+        },
+        timeout: 10000
+      });
+
+      const html = response.data;
+
+      const results = [];
+
+      const regex =
+        /<a[^>]+class="result__a"[^>]*>(.*?)<\/a>[\s\S]*?<a[^>]+class="result__snippet"[^>]*>(.*?)<\/a>/g;
+
+      let match;
+
+      while (
+        (match = regex.exec(html)) !== null &&
+        results.length < 5
+      ) {
+        const title = match[1]
+          .replace(/<[^>]+>/g, '')
+          .replace(/&amp;/g, '&')
+          .replace(/&quot;/g, '"')
+          .replace(/&#x27;/g, "'")
+          .trim();
+
+        const snippet = match[2]
+          .replace(/<[^>]+>/g, '')
+          .replace(/&amp;/g, '&')
+          .replace(/&quot;/g, '"')
+          .replace(/&#x27;/g, "'")
+          .trim();
+
+        if (title) {
+          results.push({
+            title,
+            snippet
+          });
+        }
+      }
+
+      console.log(
+        `[MMM-TuAsistente] Resultados encontrados: ${results.length}`
+      );
+
+      this.sendSocketNotification(
+        'WEB_RESULTS',
+        results
+      );
+
+      return results;
+
+    } catch (error) {
+
+      console.error(
+        '[MMM-TuAsistente] Error en búsqueda web:',
+        error.message
+      );
+
+      this.sendSocketNotification(
+        'WEB_RESULTS',
+        []
+      );
+
+      return [];
+    }
+  },
   buscarYouTube(query, callback) {
     const ytDlpBin = path.join(__dirname, 'venv', 'bin', 'yt-dlp');
     const cmd = `"${ytDlpBin}" "ytsearch1:${query}" --get-id --no-warnings`;
@@ -211,7 +538,226 @@ module.exports = NodeHelper.create({
   },
 
   async handleChat({ prompt }) {
-    const lowerPrompt = prompt.toLowerCase();
+    let lowerPrompt = prompt.toLowerCase();
+
+    // Correcciones habituales del reconocimiento de voz
+    lowerPrompt = lowerPrompt
+      .replace(/muéltame/g, 'muéstrame')
+      .replace(/mueltame/g, 'muestrame')
+      .replace(/muéltame/g, 'muéstrame')
+      .replace(/muestrame/g, 'muéstrame')
+      .replace(/muestrame/g, 'muéstrame')
+      .replace(/ensename/g, 'enséñame')
+      .replace(/enséname/g, 'enséñame')
+      .replace(/doraemón/g, 'doraemon')
+      .replace(/dorayemón/g, 'doraemon')
+      .replace(/dorayemon/g, 'doraemon')
+      .replace(/orayno/g, 'doraemon')
+      .replace(/oraymon/g, 'doraemon');
+    // ==========================================
+    // BÚSQUEDA WEB
+    // ==========================================
+
+    const webSearch =
+      /^(busca|buscar|búscame|búscame en internet|busca en internet|qué dice internet|que dice internet|información sobre|informacion sobre)/i.test(
+        prompt.trim()
+      );
+
+    if (webSearch) {
+
+      let query = prompt
+        .replace(
+          /^(busca|buscar|búscame|búscame en internet|busca en internet|qué dice internet|que dice internet|información sobre|informacion sobre)\s*/i,
+          ''
+        )
+        .trim();
+
+      if (!query) {
+        this.speakText('¿Qué quieres que busque?');
+        this.sendSocketNotification(
+          'ASSISTANT_RESPONSE',
+          '¿Qué quieres que busque?'
+        );
+        this.isThinking = false;
+        return;
+      }
+
+      this.sendSocketNotification(
+        'STATUS',
+        'Buscando en Internet...'
+      );
+
+      this.speakText(
+        `Buscando información sobre ${query}`
+      );
+
+      const results =
+        await this.buscarWeb(query);
+
+      if (results.length > 0) {
+
+        this.sendSocketNotification(
+          'ASSISTANT_RESPONSE',
+          `He encontrado ${results.length} resultados sobre ${query}.`
+        );
+
+      } else {
+
+        this.speakText(
+          'No he encontrado resultados.'
+        );
+
+        this.sendSocketNotification(
+          'ASSISTANT_RESPONSE',
+          'No he encontrado resultados.'
+        );
+      }
+
+      this.isThinking = false;
+      return;
+    }
+    // =========================================================
+    // 1. MOSTRAR IMAGEN
+    // =========================================================
+    //
+    // Detecta peticiones como:
+    // "muéstrame una foto de Doraemon"
+    // "enséñame una imagen de Doraemon"
+    // "quiero ver una foto de Doraemon"
+    // "busca una imagen de Doraemon"
+    // "muestra fotos de Doraemon"
+    //
+
+    const imageRequest =
+      /\b(foto|fotos|imagen|imágenes|imagenes)\b/i.test(lowerPrompt) &&
+      /\b(muestra|mostrar|muéstrame|muestrame|enséñame|ensename|ensena|busca|buscar|quiero|ver|pon|dame)\b/i.test(lowerPrompt);
+
+    if (imageRequest) {
+
+      let imageQuery = lowerPrompt;
+
+      // ==========================================================
+      // LIMPIEZA ROBUSTA DE LA PETICIÓN DE IMAGEN
+      // ==========================================================
+
+      imageQuery = imageQuery
+        // Frases de activación
+        .replace(/\bmuéstrame\b/gi, '')
+        .replace(/\bmuestrame\b/gi, '')
+        .replace(/\bmuéltame\b/gi, '')
+        .replace(/\bmueltame\b/gi, '')
+        .replace(/\benséñame\b/gi, '')
+        .replace(/\bensename\b/gi, '')
+        .replace(/\bensena\b/gi, '')
+        .replace(/\bmuestra\b/gi, '')
+        .replace(/\bmostrarme\b/gi, '')
+        .replace(/\bmostrar\b/gi, '')
+        .replace(/\bbusca\b/gi, '')
+        .replace(/\bbuscar\b/gi, '')
+        .replace(/\bquiero\b/gi, '')
+        .replace(/\bver\b/gi, '')
+        .replace(/\bpon\b/gi, '')
+        .replace(/\bdame\b/gi, '')
+
+        // Tipo de contenido
+        .replace(/\bfotos?\b/gi, '')
+        .replace(/\bfotografías?\b/gi, '')
+        .replace(/\bfotografias?\b/gi, '')
+        .replace(/\bimagen\b/gi, '')
+        .replace(/\bimágenes?\b/gi, '')
+        .replace(/\bimagenes?\b/gi, '')
+        .replace(/\bfoto\b/gi, '')
+        .replace(/\bfotos\b/gi, '')
+
+        // Conectores
+        .replace(/\bde\b/gi, ' ')
+        .replace(/\bdel\b/gi, ' ')
+        .replace(/\buna\b/gi, ' ')
+        .replace(/\bun\b/gi, ' ')
+        .replace(/\bla\b/gi, ' ')
+        .replace(/\bel\b/gi, ' ')
+
+        // Errores habituales de Whisper
+        .replace(/\bdorayemón\b/gi, 'doraemon')
+        .replace(/\bdorayemon\b/gi, 'doraemon')
+        .replace(/\bdoraemón\b/gi, 'doraemon')
+        .replace(/\borayno\b/gi, 'doraemon')
+        .replace(/\boraymon\b/gi, 'doraemon')
+
+        // Espacios y puntuación sobrante
+        .replace(/[¿?¡!.,;:]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+      if (!imageQuery) {
+
+        this.speakText(
+          '¿Qué imagen quieres que muestre?'
+        );
+
+        this.sendSocketNotification(
+          'ASSISTANT_RESPONSE',
+          '¿Qué imagen quieres que muestre?'
+        );
+
+        this.isThinking = false;
+        return;
+      }
+
+      console.log(
+        `[MMM-TuAsistente] Petición de imagen detectada: ${imageQuery}`
+      );
+
+      this.sendSocketNotification(
+        'STATUS',
+        'Buscando imagen...'
+      );
+
+      this.speakText(
+        `Buscando una imagen de ${imageQuery}`
+      );
+
+      const imageUrl =
+        await this.buscarImagen(imageQuery);
+
+      if (imageUrl) {
+
+        console.log(
+          `[MMM-TuAsistente] Imagen encontrada: ${imageUrl}`
+        );
+
+        this.sendSocketNotification(
+          'SHOW_IMAGE',
+          {
+            url: imageUrl,
+            query: imageQuery
+          }
+        );
+
+        this.sendSocketNotification(
+          'ASSISTANT_RESPONSE',
+          `Aquí tienes una imagen de ${imageQuery}.`
+        );
+
+      } else {
+
+        console.error(
+          `[MMM-TuAsistente] No se encontró imagen para: ${imageQuery}`
+        );
+
+        this.speakText(
+          'No he encontrado una imagen.'
+        );
+
+        this.sendSocketNotification(
+          'ASSISTANT_RESPONSE',
+          'No he encontrado una imagen.'
+        );
+      }
+
+      this.isThinking = false;
+      return;
+    }
 
     // 1. DETENER YOUTUBE
     if (
@@ -220,8 +766,8 @@ module.exports = NodeHelper.create({
       lowerPrompt.includes('para el video')
     ) {
       this.sendSocketNotification('STOP_YOUTUBE');
-      this.speakText('V�deo cerrado');
-      this.sendSocketNotification('ASSISTANT_RESPONSE', 'V�deo cerrado.');
+      this.speakText('V�deo cerrado');
+      this.sendSocketNotification('ASSISTANT_RESPONSE', 'V�deo cerrado.');
       this.isThinking = false;
       return;
     }
@@ -244,13 +790,13 @@ module.exports = NodeHelper.create({
 
       if (busqueda.length > 0) {
         this.speakText(`Buscando ${busqueda} en YouTube`);
-        this.sendSocketNotification('ASSISTANT_RESPONSE', `Poniendo v�deo: ${busqueda}...`);
+        this.sendSocketNotification('ASSISTANT_RESPONSE', `Poniendo v�deo: ${busqueda}...`);
 
         this.buscarYouTube(busqueda, (videoId) => {
           if (videoId) {
             this.sendSocketNotification('PLAY_YOUTUBE', { videoId: videoId });
           } else {
-            this.speakText('No pude encontrar ese v�deo en YouTube');
+            this.speakText('No pude encontrar ese v�deo en YouTube');
             this.sendSocketNotification('STATUS', 'ERROR');
           }
         });
