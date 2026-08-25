@@ -17,3 +17,13 @@ piper_tts/
 # Archivos de sistema y entorno
 .DS_Store
 .env
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Backups
+*.backup
+*.bak
+*.broken
+*.old
