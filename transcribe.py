@@ -22,8 +22,9 @@ SAMPLE_RATE = 16000
 CHANNELS = 4
 BLOCKSIZE = 2048
 
-# PipeWire = dispositivo 5 según tu sistema
-DEVICE_INDEX = 5
+# No usar un índice fijo: PipeWire puede cambiarlo después de reiniciar.
+# El micrófono USB se identifica por su nombre.
+DEVICE_INDEX = None
 
 # Whisper trabajará con MONO
 WHISPER_CHANNELS = 1
@@ -83,13 +84,68 @@ try:
                 flush=True
             )
 
-    device = devices[DEVICE_INDEX]
-
-    print(
-        f"[audio] Usando PipeWire: "
-        f"{DEVICE_INDEX} - {device['name']}",
-        flush=True
+    # PipeWire puede ocultar temporalmente el dispositivo USB
+    # como dispositivo independiente. En ese caso usamos
+    # el dispositivo "pipewire", que recibe el micrófono USB.
+    usb_keywords = (
+        "usb camera",
+        "omnivision",
+        "b3.04.06.1",
+        "usb audio"
     )
+
+    DEVICE_INDEX = None
+    device = None
+
+    # 1. Buscar directamente el micrófono USB.
+    for i, candidate in enumerate(devices):
+
+        name = candidate["name"].lower()
+        inputs = int(candidate.get("max_input_channels", 0))
+
+        if inputs > 0 and any(
+            keyword in name for keyword in usb_keywords
+        ):
+            DEVICE_INDEX = i
+            device = candidate
+
+            print(
+                f"[audio] Micrófono USB encontrado directamente: "
+                f"{DEVICE_INDEX} - {device['name']}",
+                flush=True
+            )
+
+            break
+
+    # 2. Si PipeWire todavía no muestra el USB directamente,
+    # utilizar su entrada virtual.
+    if DEVICE_INDEX is None:
+
+        for i, candidate in enumerate(devices):
+
+            name = candidate["name"].lower()
+            inputs = int(candidate.get("max_input_channels", 0))
+
+            if inputs > 0 and name == "pipewire":
+                DEVICE_INDEX = i
+                device = candidate
+
+                print(
+                    f"[audio] USB no expuesto directamente; "
+                    f"usando PipeWire: {DEVICE_INDEX} - {device['name']}",
+                    flush=True
+                )
+
+                break
+
+    if DEVICE_INDEX is None:
+
+        print(
+            "[audio] ERROR: no se encontró ninguna entrada de audio.",
+            flush=True
+        )
+
+        sys.exit(1)
 
 except Exception as e:
 
