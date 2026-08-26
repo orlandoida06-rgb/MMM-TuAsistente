@@ -13,8 +13,6 @@ Module.register("MMM-TuAsistente", {
     this.assistantResponse = "";
     this.currentState = "hidden";
     this.youtubeVideoId = null;
-    this.imageUrl = null;
-    this.imageQuery = "";
     this.hideTimer = null;
 
     this.sendSocketNotification("INIT_CONFIG", this.config);
@@ -94,19 +92,13 @@ window.onYouTubeIframeAPIReady = () => {
 
       this.assistantResponse = payload;
 
-      if (
-        this.currentState !== "video" &&
-        this.currentState !== "image"
-      ) {
+      if (this.currentState !== "video") {
         this.currentState = "speaking";
       }
 
       this.updateDom(200);
 
-      if (
-        this.currentState !== "video" &&
-        this.currentState !== "image"
-      ) {
+      if (this.currentState !== "video") {
 
         if (this.hideTimer) {
           clearTimeout(this.hideTimer);
@@ -122,40 +114,6 @@ window.onYouTubeIframeAPIReady = () => {
 
         }, this.config.hideDelay);
       }
-    }
-
-
-    else if (notification === "SHOW_IMAGE") {
-
-      if (this.hideTimer) {
-        clearTimeout(this.hideTimer);
-      }
-
-      this.imageUrl = payload.url;
-      this.imageQuery = payload.query || "";
-
-      this.currentState = "image";
-
-      this.userQuery = "";
-      this.assistantResponse = "";
-
-      console.log(
-        "[MMM-TuAsistente] Mostrando imagen:",
-        this.imageUrl
-      );
-
-     this.updateDom(300);
-
-this.hideTimer = setTimeout(() => {
-
-  this.imageUrl = null;
-  this.imageQuery = "";
-
-  this.currentState = "hidden";
-
-  this.updateDom(300);
-
-}, 10000);
     }
 
 
@@ -236,54 +194,6 @@ initYouTubePlayer: function () {
      * - No mostramos respuesta
      * - Solo mostramos YouTube
      */
-
-    /*
-     * IMAGEN
-     *
-     * Mostramos directamente la imagen encontrada.
-     */
-
-    if (this.currentState === "image") {
-
-      if (this.imageUrl) {
-
-        const imageContainer =
-          document.createElement("div");
-
-        imageContainer.className =
-          "assistant-image-container";
-
-        const image =
-          document.createElement("img");
-
-        image.className =
-          "assistant-image";
-
-        image.src = this.imageUrl;
-
-        image.alt =
-          this.imageQuery || "Imagen";
-
-        image.onload = () => {
-          console.log(
-            "[MMM-TuAsistente] Imagen cargada correctamente."
-          );
-        };
-
-        image.onerror = () => {
-          console.error(
-            "[MMM-TuAsistente] Error cargando imagen:",
-            this.imageUrl
-          );
-        };
-
-        imageContainer.appendChild(image);
-        wrapper.appendChild(imageContainer);
-      }
-
-      return wrapper;
-    }
-
 
     if (this.currentState === "video") {
 

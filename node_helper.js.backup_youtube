@@ -484,146 +484,134 @@ module.exports = NodeHelper.create({
       return [];
     }
   },
-async buscarYouTube(query) {
-  const { execFile } = require('child_process');
-  const path = require('path');
+  async buscarYouTube(query) {
+    const { execFile } = require('child_process');
+    const path = require('path');
 
-  const ytDlpBin = path.join(
-    __dirname,
-    'venv',
-    'bin',
-    'yt-dlp'
-  );
-
-  // Limpiar la consulta
-  let busqueda = String(query || '')
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/\bmu[eé]strame\b/gi, '')
-    .replace(/\bmuestrame\b/gi, '')
-    .replace(/\bens[eé]name\b/gi, '')
-    .replace(/\bensename\b/gi, '')
-    .replace(/\bmostrar\b/gi, '')
-    .replace(/\bmuestra\b/gi, '')
-    .replace(/\bquiero\b/gi, '')
-    .replace(/\bver\b/gi, '')
-    .replace(/\bpon\b/gi, '')
-    .replace(/\bdame\b/gi, '')
-    .replace(/\bun video\b/gi, '')
-    .replace(/\bun vídeo\b/gi, '')
-    .replace(/\bvideo\b/gi, '')
-    .replace(/\bvídeo\b/gi, '')
-    .replace(/\bde\b/gi, ' ')
-    .replace(/\ben youtube\b/gi, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-
-  // Correcciones de reconocimiento de voz
-  busqueda = busqueda
-    .replace(/\bdorayemon\b/gi, 'doraemon')
-    .replace(/\bdorayem[oó]n\b/gi, 'doraemon')
-    .replace(/\bdoraem[oó]n\b/gi, 'doraemon')
-    .replace(/\borayno\b/gi, 'doraemon')
-    .replace(/\boraymon\b/gi, 'doraemon');
-
-  if (!busqueda) {
-    console.error(
-      '[MMM-TuAsistente] Búsqueda YouTube vacía.'
+    const ytDlpBin = path.join(
+      __dirname,
+      'venv',
+      'bin',
+      'yt-dlp'
     );
-    return null;
-  }
-
-  console.log(
-    `[MMM-TuAsistente] Búsqueda YouTube: ${busqueda}`
-  );
-
-  try {
-
-    const stdout = await new Promise((resolve, reject) => {
-
-      execFile(
-        ytDlpBin,
-        [
-          `ytsearch5:${busqueda}`,
-          '--flat-playlist',
-          '--print',
-          '%(id)s|%(title)s',
-          '--no-warnings',
-          '--ignore-errors'
-        ],
-        {
-          timeout: 30000,
-          maxBuffer: 1024 * 1024
-        },
-        (error, stdout) => {
-
-          if (!stdout || !stdout.trim()) {
-            reject(
-              error ||
-              new Error('YouTube no devolvió resultados')
-            );
-            return;
-          }
-
-          resolve(stdout);
-        }
-      );
-
-    });
-
-    const resultados = stdout
-      .split(/\r?\n/)
-      .map(linea => linea.trim())
-      .filter(Boolean);
 
     console.log(
-      `[MMM-TuAsistente] Resultados YouTube: ${resultados.length}`
+      `[MMM-TuAsistente] Búsqueda YouTube: ${query}`
     );
 
-    // Buscar el primer resultado con un ID válido
-    for (const linea of resultados) {
+    try {
+      const stdout = await new Promise((resolve, reject) => {
+        execFile(
+          ytDlpBin,
+          [
+            `ytsearch5:${query}`,
+            '--flat-playlist',
+            '--print',
+            '%(id)s|%(title)s',
+            '--no-warnings',
+            '--ignore-errors'
+          ],
+          {
+            timeout: 30000,
+            maxBuffer: 1024 * 1024
+          },
+          (error, stdout) => {
+            if (error && !stdout.trim()) {
+              reject(error);
+              return;
+            }
 
-      const separador = linea.indexOf('|');
+            resolve(stdout);
+          }
+        );
+      });
 
-      if (separador === -1) {
-        continue;
-      }
-
-      const videoId =
-        linea.substring(0, separador).trim();
-
-      const titulo =
-        linea.substring(separador + 1).trim();
-
-      // ID normal de YouTube = 11 caracteres
-      if (!/^[A-Za-z0-9_-]{11}$/.test(videoId)) {
-        continue;
-      }
+      const resultados = stdout
+        .split('\n')
+        .map(linea => linea.trim())
+        .filter(Boolean);
 
       console.log(
-        `[MMM-TuAsistente] Vídeo seleccionado: ${videoId} - ${titulo}`
+        `[MMM-TuAsistente] Resultados YouTube: ${resultados.length}`
       );
 
-      return videoId;
+      if (resultados.length === 0) {
+        console.error(
+          '[MMM-TuAsistente] YouTube no devolvió resultados.'
+        );
+        return null;
+      }
+
+      for (const linea of resultados) {
+        const separador = linea.indexOf('|');
+
+        if (separador === -1) {
+          continue;
+        }
+
+        const videoId =
+          linea.substring(0, separador).trim();
+
+        const titulo =
+          linea.substring(separador + 1).trim();
+
+        if (!/^[A-Za-z0-9_-]{11}$/.test(videoId)) {
+          continue;
+        }
+
+        console.log(
+          `[MMM-TuAsistente] Comprobando vídeo: ${videoId} - ${titulo}`
+        );
+
+        const valido = await new Promise(resolve => {
+          execFile(
+            ytDlpBin,
+            [
+              `https://www.youtube.com/watch?v=${videoId}`,
+              '--skip-download',
+              '--simulate',
+              '--no-warnings',
+              '--ignore-errors'
+            ],
+            {
+              timeout: 15000,
+              maxBuffer: 256 * 1024
+            },
+            error => {
+              resolve(!error);
+            }
+          );
+        });
+
+        if (valido) {
+          console.log(
+            `[MMM-TuAsistente] Vídeo válido: ${videoId} - ${titulo}`
+          );
+
+          return videoId;
+        }
+
+        console.log(
+          `[MMM-TuAsistente] Vídeo no disponible: ${videoId}`
+        );
+      }
+
+      console.error(
+        '[MMM-TuAsistente] Ningún vídeo disponible.'
+      );
+
+      return null;
+
+    } catch (error) {
+      console.error(
+        '[MMM-TuAsistente] Error al buscar en YouTube:',
+        error.message
+      );
+
+      return null;
     }
+  },
 
-    console.error(
-      '[MMM-TuAsistente] No se encontró ningún vídeo válido.'
-    );
-
-    return null;
-
-  } catch (error) {
-
-    console.error(
-      '[MMM-TuAsistente] Error al buscar en YouTube:',
-      error.message
-    );
-
-    return null;
-  }
-},
   async handleChat({ prompt }) {
     let lowerPrompt = prompt.toLowerCase();
 
@@ -859,170 +847,36 @@ async buscarYouTube(query) {
       return;
     }
 
-    // ==========================================================
     // 2. REPRODUCIR YOUTUBE
-    // ==========================================================
     if (
       lowerPrompt.includes('pon') ||
-      lowerPrompt.includes('ponme') ||
-      lowerPrompt.includes('pon un') ||
-      lowerPrompt.includes('pon el') ||
       lowerPrompt.includes('reproduce') ||
-      lowerPrompt.includes('reproducir') ||
-      lowerPrompt.includes('vídeo') ||
       lowerPrompt.includes('video') ||
       lowerPrompt.includes('youtube')
     ) {
-
-      let busqueda = lowerPrompt;
-
-      // ==========================================================
-      // LIMPIEZA ROBUSTA DE YOUTUBE
-      // ==========================================================
-
-      // Normalizar acentos
-      busqueda = busqueda.normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '');
-
-      // Frases completas de petición
-      busqueda = busqueda
-        .replace(/\bmu[eé]strame\b/gi, ' ')
-        .replace(/\bmu[eé]ltame\b/gi, ' ')
-        .replace(/\bmu[eé]strame\b/gi, ' ')
-        .replace(/\bens[eé]name\b/gi, ' ')
-        .replace(/\bens[eé]neme\b/gi, ' ')
-        .replace(/\bensena\b/gi, ' ')
-        .replace(/\benseñame\b/gi, ' ')
-        .replace(/\bmostrarme\b/gi, ' ')
-        .replace(/\bmostrar\b/gi, ' ')
-        .replace(/\bmuestra\b/gi, ' ')
-        .replace(/\bquiero\b/gi, ' ')
-        .replace(/\bquisiera\b/gi, ' ')
-        .replace(/\bme gustaria\b/gi, ' ')
-        .replace(/\bme gustaría\b/gi, ' ')
-        .replace(/\bdame\b/gi, ' ')
-        .replace(/\bponme\b/gi, ' ')
-        .replace(/\bpon\b/gi, ' ')
-        .replace(/\breproduce\b/gi, ' ')
-        .replace(/\breproduceme\b/gi, ' ')
-        .replace(/\bbusca\b/gi, ' ')
-        .replace(/\bbuscar\b/gi, ' ')
-        .replace(/\bver\b/gi, ' ')
-        .replace(/\bte\b/gi, ' ')
-
-        // Tipo de contenido
-        .replace(/\bun video\b/gi, ' ')
-        .replace(/\buna video\b/gi, ' ')
-        .replace(/\bel video\b/gi, ' ')
-        .replace(/\bla video\b/gi, ' ')
-        .replace(/\bvideo\b/gi, ' ')
-        .replace(/\bvideos\b/gi, ' ')
-        .replace(/\byoutube\b/gi, ' ')
-
-        // Conectores
-        .replace(/\bacerca de\b/gi, ' ')
-        .replace(/\bsobre\b/gi, ' ')
-        .replace(/\bdel\b/gi, ' ')
-        .replace(/\bde\b/gi, ' ')
-        .replace(/\buna\b/gi, ' ')
-        .replace(/\bun\b/gi, ' ')
-        .replace(/\bel\b/gi, ' ')
-        .replace(/\bla\b/gi, ' ')
-        .replace(/\blos\b/gi, ' ')
-        .replace(/\blas\b/gi, ' ')
-
-        // Posesivos
-        .replace(/\bmis\b/gi, ' ')
-        .replace(/\bmi\b/gi, ' ')
-
-        // Errores conocidos de Whisper
-        .replace(/\bdorayemon\b/gi, 'doraemon')
-        .replace(/\bdorayemon\b/gi, 'doraemon')
-        .replace(/\bdoraemon\b/gi, 'doraemon')
-        .replace(/\bdoraena\b/gi, 'doraemon')
-        .replace(/\bdoramon\b/gi, 'doraemon')
-        .replace(/\borayno\b/gi, 'doraemon')
-        .replace(/\boraymon\b/gi, 'doraemon')
-
-        // Letras sueltas que aparecen por errores de reconocimiento
-        .replace(/\be\b/gi, ' ')
-        .replace(/\by\b/gi, ' ')
-
-        // Puntuación
-        .replace(/[¿?¡!.,;:]+/g, ' ')
-
-        // Espacios
-        .replace(/\s+/g, ' ')
+      let busqueda = lowerPrompt
+        .replace(/pon/g, '')
+        .replace(/reproduce/g, '')
+        .replace(/un video de/g, '')
+        .replace(/el video de/g, '')
+        .replace(/video de/g, '')
+        .replace(/en youtube/g, '')
         .trim();
 
-      console.log(
-        `[MMM-TuAsistente] Búsqueda YouTube limpia: ${busqueda}`
-      );
-
       if (busqueda.length > 0) {
+        this.speakText(`Buscando ${busqueda} en YouTube`);
+        this.sendSocketNotification('ASSISTANT_RESPONSE', `Poniendo v�deo: ${busqueda}...`);
 
-        this.speakText(
-          `Buscando ${busqueda} en YouTube`
-        );
+        const videoId = await this.buscarYouTube(busqueda);
 
-        this.sendSocketNotification(
-          'ASSISTANT_RESPONSE',
-          `Buscando ${busqueda} en YouTube...`
-        );
-
-        try {
-
-          const videoId =
-            await this.buscarYouTube(busqueda);
-
-          if (videoId) {
-
-            console.log(
-              `[MMM-TuAsistente] PLAY_YOUTUBE: ${videoId}`
-            );
-
-            this.sendSocketNotification(
-              'PLAY_YOUTUBE',
-              {
-                videoId: videoId
-              }
-            );
-
-          } else {
-
-            console.error(
-              `[MMM-TuAsistente] No se encontró vídeo válido para: ${busqueda}`
-            );
-
-            this.speakText(
-              `No he encontrado un vídeo de ${busqueda}`
-            );
-
-            this.sendSocketNotification(
-              'ASSISTANT_RESPONSE',
-              `No he encontrado un vídeo de ${busqueda}.`
-            );
-
-            this.sendSocketNotification(
-              'STATUS',
-              'ERROR'
-            );
-          }
-
-        } catch (error) {
-
-          console.error(
-            '[MMM-TuAsistente] Error buscando YouTube:',
-            error.message
-          );
-
-          this.speakText(
-            'No pude encontrar un vídeo en YouTube'
-          );
-
+        if (videoId) {
           this.sendSocketNotification(
-            'ASSISTANT_RESPONSE',
-            'No pude encontrar un vídeo en YouTube.'
+            'PLAY_YOUTUBE',
+            { videoId: videoId }
+          );
+        } else {
+          this.speakText(
+            'No pude encontrar ese vídeo en YouTube'
           );
 
           this.sendSocketNotification(

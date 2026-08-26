@@ -1,0 +1,425 @@
+# -*- coding: utf-8 -*-
+
+import os
+import sys
+
+os.environ["OMP_NUM_THREADS"] = "2"
+os.environ["OPENBLAS_NUM_THREADS"] = "2"
+os.environ["MKL_NUM_THREADS"] = "2"
+
+import sounddevice as sd
+import numpy as np
+from faster_whisper import WhisperModel
+
+
+# ==============================================================================
+# CONFIGURACIÓN
+# ==============================================================================
+
+SAMPLE_RATE = 16000
+CHANNELS = 1
+BLOCKSIZE = 1024
+
+# ALSA seleccionado por el instalador.
+# Formato: card,device
+ALSA_DEVICE = "null"
+
+# Si se conoce directamente el índice sounddevice se puede poner aquí.
+# None = detección automática.
+DEVICE_INDEX = None
+
+
+# ==============================================================================
+# ESTADO
+# ==============================================================================
+
+is_recording = False
+audio_buffer = []
+
+
+        # ----------------------------------------------------------------------
+        # MICRÓFONO USB DE LA CÁMARA - PRIORIDAD
+        # ----------------------------------------------------------------------
+        usb_keywords = (
+            "omnivision",
+            "usb_camera",
+            "usb camera",
+            "analog-surround"
+        )
+
+        for i, device in enumerate(devices):
+
+            name = str(device.get("name", "")).lower()
+
+            if int(device.get("max_input_channels", 0)) <= 0:
+                continue
+
+            if any(word in name for word in usb_keywords):
+
+                print(
+                    f"[audio] Micrófono USB seleccionado: "
+                    f"{i} - {device['name']}",
+                    flush=True
+                )
+
+                return i
+        # ----------------------------------------------------------------------
+        # Primero intentamos encontrar el ALSA exacto
+        # ----------------------------------------------------------------------
+
+        if ALSA_DEVICE and ALSA_DEVICE != "null":
+
+            card, devno = ALSA_DEVICE.split(",", 1)
+
+            patterns = [
+                f"hw:{card},{devno}",
+                f"plughw:{card},{devno}",
+                f"{card},{devno}",
+            ]
+
+            for i, device in enumerate(devices):
+
+                name = str(device.get("name", ""))
+
+                if int(device.get("max_input_channels", 0)) <= 0:
+                    continue
+
+                for pattern in patterns:
+
+                    if pattern in name:
+                        print(
+                            f"[audio] Micrófono seleccionado: "
+                            f"{i} - {name}",
+                            flush=True
+                        )
+                        return i
+
+        # ----------------------------------------------------------------------
+        # Si DEVICE_INDEX está definido, comprobarlo
+        # ----------------------------------------------------------------------
+
+        if DEVICE_INDEX is not None:
+
+            try:
+
+                index = int(DEVICE_INDEX)
+
+                device = devices[index]
+
+                if int(device.get("max_input_channels", 0)) > 0:
+
+                    print(
+                        f"[audio] Usando índice configurado: "
+                        f"{index} - {device['name']}",
+                        flush=True
+                    )
+
+                    return index
+
+            except Exception:
+                pass
+
+        # ----------------------------------------------------------------------
+        # Buscar dispositivo que parezca micrófono USB
+        # ----------------------------------------------------------------------
+
+        keywords = (
+            "usb",
+            "microphone",
+            "mic",
+            "audio",
+            "capture",
+            "headset",
+            "yichip",
+            "logitech"
+        )
+
+        for i, device in enumerate(devices):
+
+            name = str(device.get("name", "")).lower()
+
+            if int(device.get("max_input_channels", 0)) <= 0:
+                continue
+
+            if any(word in name for word in keywords):
+
+                print(
+                    f"[audio] Micrófono encontrado automáticamente: "
+                    f"{i} - {device['name']}",
+                    flush=True
+                )
+
+                return i
+
+        # ----------------------------------------------------------------------
+        # Último recurso: primer dispositivo de entrada
+        # ----------------------------------------------------------------------
+
+        for i, device in enumerate(devices):
+
+            if int(device.get("max_input_channels", 0)) > 0:
+
+                print(
+                    f"[audio] Usando primera entrada disponible: "
+                    f"{i} - {device['name']}",
+                    flush=True
+                )
+
+                return i
+
+    except Exception as e:
+
+        print(
+            f"[audio] Error detectando dispositivos: {e}",
+            flush=True
+        )
+
+    return None
+
+
+# ==============================================================================
+# WHISPER
+# ==============================================================================
+
+print("[transcribe] Loading Whisper...", flush=True)
+
+try:
+
+    model = WhisperModel(
+        "base",
+        device="cpu",
+        compute_type="int8",
+        cpu_threads=2,
+        num_workers=1
+    )
+
+except Exception as e:
+
+    print(
+        f"ERROR loading Whisper: {e}",
+        flush=True
+    )
+
+    sys.exit(1)
+
+
+print("[transcribe] Whisper ready.", flush=True)
+
+
+# ==============================================================================
+# AUDIO
+# ==============================================================================
+
+DEVICE_INDEX = find_audio_device()
+
+if DEVICE_INDEX is None:
+
+    print(
+        "[audio] No se encontró ningún micrófono.",
+        flush=True
+    )
+
+    sys.exit(1)
+
+
+# ==============================================================================
+# CALLBACK
+# ==============================================================================
+
+def callback(indata, frames, time_info, status):
+
+    global is_recording
+
+    if status:
+
+        print(
+            f"[audio] {status}",
+            file=sys.stderr,
+            flush=True
+        )
+
+    if is_recording:
+
+        audio_buffer.append(
+            indata.copy()
+        )
+
+
+# ==============================================================================
+# ABRIR MICROFONO
+# ==============================================================================
+
+try:
+
+    stream = sd.InputStream(
+        samplerate=SAMPLE_RATE,
+        channels=CHANNELS,
+        dtype="float32",
+        blocksize=BLOCKSIZE,
+        device=DEVICE_INDEX,
+        callback=callback
+    )
+
+    stream.start()
+
+except Exception as e:
+
+    print(
+        f"ERROR opening microphone: {e}",
+        flush=True
+    )
+
+    sys.exit(1)
+
+
+print(
+    f"[transcribe] Microphone ready. Device index: {DEVICE_INDEX}",
+    flush=True
+)
+
+
+# ==============================================================================
+# TRANSCRIPCIÓN
+# ==============================================================================
+def transcribe_audio():
+
+    global audio_buffer
+
+    if not audio_buffer:
+        print("TRANSCRIPTION:", flush=True)
+        return
+
+    try:
+        # Unir bloques: 48000 Hz / estéreo
+        audio_data = np.concatenate(
+            audio_buffer,
+            axis=0
+        )
+
+    except Exception as e:
+
+        print(
+            f"ERROR audio buffer: {e}",
+            flush=True
+        )
+
+        audio_buffer.clear()
+        return
+
+    audio_buffer.clear()
+
+    try:
+        # Convertir estéreo a mono
+        if audio_data.ndim > 1:
+            audio_data = np.mean(
+                audio_data,
+                axis=1
+            )
+
+        # 48000 Hz -> 16000 Hz
+        # Diezmado simple 3:1, suficiente para voz
+        audio_data = audio_data[::3]
+
+        # Asegurar float32
+        audio_data = np.asarray(
+            audio_data,
+            dtype=np.float32
+        )
+
+        segments, info = model.transcribe(
+            audio_data,
+            language="es",
+            beam_size=1,
+            best_of=1,
+            temperature=0,
+            vad_filter=True
+        )
+
+        text = " ".join(
+            segment.text
+            for segment in segments
+        ).strip()
+
+        print(
+            f"TRANSCRIPTION:{text}",
+            flush=True
+        )
+
+    except Exception as e:
+
+        print(
+            f"ERROR transcription: {e}",
+            flush=True
+        )
+
+# ==============================================================================
+# BUCLE PRINCIPAL
+# ==============================================================================
+
+try:
+
+    for line in sys.stdin:
+
+        command = line.strip()
+
+        # ----------------------------------------------------------------------
+        # START
+        # ----------------------------------------------------------------------
+
+        if command == "START":
+
+            audio_buffer.clear()
+
+            is_recording = True
+
+            print(
+                "RECORDING_STARTED",
+                flush=True
+            )
+
+        # ----------------------------------------------------------------------
+        # STOP
+        # ----------------------------------------------------------------------
+
+        elif command == "STOP":
+
+            is_recording = False
+
+            print(
+                "RECORDING_STOPPED",
+                flush=True
+            )
+
+            transcribe_audio()
+
+
+except KeyboardInterrupt:
+
+    pass
+
+
+except Exception as e:
+
+    print(
+        f"ERROR main loop: {e}",
+        flush=True
+    )
+
+
+finally:
+
+    is_recording = False
+
+    try:
+
+        stream.stop()
+        stream.close()
+
+    except Exception:
+
+        pass
+
+    print(
+        "[transcribe] Stopped.",
+        flush=True
+    )

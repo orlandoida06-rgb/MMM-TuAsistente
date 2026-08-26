@@ -200,196 +200,237 @@ module.exports = NodeHelper.create({
   // ==========================================
   async buscarImagen(query) {
     try {
+      const axios = require('axios');
 
-      console.log(
-        `[MMM-TuAsistente] Buscando imágenes en DuckDuckGo: ${query}`
-      );
+      // =========================================================
+      // NORMALIZAR CONSULTA
+      // =========================================================
 
-      const {
-        imageSearch
-      } = require('@mudbill/duckduckgo-images-api');
+      let busqueda = String(query || '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[¿?¡!.,;:]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
 
-      /*
-       * =========================================================
-       * BÚSQUEDA DUCKDUCKGO
-       * =========================================================
-       */
+      // Errores habituales de Whisper.
+      const correcciones = {
+        'oráimen': 'doraemon',
+        'oraimen': 'doraemon',
+        'oraymon': 'doraemon',
+        'oraymen': 'doraemon',
+        'dorayemon': 'doraemon',
+        'doraymen': 'doraemon',
+        'doraimon': 'doraemon',
+        'doraimón': 'doraemon',
+        'doraemon': 'doraemon'
+      };
 
-      const resultados = await imageSearch({
-        query: query,
-        safe: true,
-        iterations: 1,
-        retries: 2
-      });
+      for (const [incorrecto, correcto] of Object.entries(correcciones)) {
+        if (busqueda.includes(incorrecto)) {
+          busqueda = busqueda.replace(
+            new RegExp(
+              incorrecto.normalize('NFD').replace(/[\u0300-\u036f]/g, ''),
+              'gi'
+            ),
+            correcto
+          );
+        }
+      }
 
-      if (!Array.isArray(resultados) || resultados.length === 0) {
+      // Quitar palabras que no forman parte del tema.
+      busqueda = busqueda
+        .replace(/\bfoto\b/g, '')
+        .replace(/\bfotos\b/g, '')
+        .replace(/\bimagen\b/g, '')
+        .replace(/\bimagenes\b/g, '')
+        .replace(/\bmuestra\b/g, '')
+        .replace(/\bmostrar\b/g, '')
+        .replace(/\bmuéstrame\b/g, '')
+        .replace(/\benséñame\b/g, '')
+        .replace(/\bbusca\b/g, '')
+        .replace(/\bbuscar\b/g, '')
+        .replace(/\bquiero\b/g, '')
+        .replace(/\bver\b/g, '')
+        .replace(/\bpon\b/g, '')
+        .replace(/\bdame\b/g, '')
+        .replace(/\buna\b/g, '')
+        .replace(/\bun\b/g, '')
+        .replace(/\bde\b/g, '')
+        .replace(/\bdel\b/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
 
+      if (!busqueda) {
         console.error(
-          `[MMM-TuAsistente] DuckDuckGo no devolvió imágenes para: ${query}`
+          '[MMM-TuAsistente] Consulta de imagen vacía.'
         );
-
         return null;
       }
 
       console.log(
-        `[MMM-TuAsistente] DuckDuckGo devolvió ${resultados.length} resultados`
+        `[MMM-TuAsistente] Búsqueda de imagen normalizada: ${busqueda}`
       );
 
-      /*
-       * =========================================================
-       * NORMALIZAR TEXTO
-       * =========================================================
-       */
+      const url =
+        'https://www.bing.com/images/search?q=' +
+        encodeURIComponent(busqueda);
 
-      const normalizar = (texto) => {
+      const response = await axios.get(url, {
+        headers: {
+          'User-Agent':
+            'Mozilla/5.0 (X11; Linux aarch64) AppleWebKit/537.36 Chrome/120 Safari/537.36',
+          'Accept-Language':
+            'es-ES,es;q=0.9,en;q=0.8',
+          'Accept':
+            'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+        },
+        timeout: 15000
+      });
 
-        return String(texto || '')
-          .toLowerCase()
-          .normalize('NFD')
-          .replace(/[\u0300-\u036f]/g, '')
-          .replace(/[^\w\s-]/g, ' ')
-          .replace(/\s+/g, ' ')
-          .trim();
+      const html = response.data;
 
-      };
+      console.log(
+        `[MMM-TuAsistente] Bing respondió HTTP ${response.status}, HTML: ${html.length} bytes`
+      );
 
-      const busqueda = normalizar(query);
+      // =========================================================
+      // EXTRAER RESULTADOS
+      // =========================================================
+
+      const resultados = [];
+      const regex =
+        /<a[^>]+class="iusc"[^>]+m="([^"]+)"/gi;
+
+      let match;
+
+      while ((match = regex.exec(html)) !== null) {
+        try {
+          let data = match[1];
+
+          data = data
+            .replace(/&quot;/g, '"')
+            .replace(/&amp;/g, '&')
+            .replace(/&#39;/g, "'")
+            .replace(/\\u002f/g, '/')
+            .replace(/\\\//g, '/');
+
+          const obj = JSON.parse(data);
+
+          const imageUrl = obj.murl || null;
+          const titulo = obj.t || '';
+          const pagina = obj.purl || '';
+
+          if (!imageUrl) continue;
+
+          if (
+            !imageUrl.startsWith('http://') &&
+            !imageUrl.startsWith('https://')
+          ) {
+            continue;
+          }
+
+          resultados.push({
+            url: imageUrl,
+            titulo: String(titulo),
+            pagina: String(pagina)
+          });
+
+        } catch {
+          continue;
+        }
+      }
+
+      if (resultados.length === 0) {
+        console.error(
+          '[MMM-TuAsistente] Bing no devolvió resultados utilizables.'
+        );
+        return null;
+      }
+
+      console.log(
+        `[MMM-TuAsistente] Resultados Bing encontrados: ${resultados.length}`
+      );
+
+      // =========================================================
+      // PUNTUACIÓN
+      // =========================================================
 
       const palabras = busqueda
         .split(/\s+/)
-        .filter(p => p.length >= 2);
+        .filter(p => p.length >= 3);
 
-      /*
-       * =========================================================
-       * SELECCIÓN DE LA IMAGEN MÁS RELEVANTE
-       * =========================================================
-       */
-
-      let mejor = null;
-      let mejorPuntuacion = -999;
+      const candidatos = [];
 
       for (const resultado of resultados) {
 
-        const titulo =
-          resultado.title ||
-          resultado.titulo ||
-          '';
-
-        const imageUrl =
-          resultado.image ||
-          resultado.imageUrl ||
-          resultado.thumbnail ||
-          '';
-
-        const pageUrl =
-          resultado.url ||
-          resultado.pageUrl ||
-          resultado.source ||
-          '';
-
-        if (!imageUrl) {
-          continue;
-        }
-
-        if (
-          !imageUrl.startsWith('http://') &&
-          !imageUrl.startsWith('https://')
-        ) {
-          continue;
-        }
-
-        const texto = normalizar(
-          `${titulo} ${pageUrl} ${imageUrl}`
-        );
+        const texto =
+          `${resultado.titulo} ${resultado.pagina} ${resultado.url}`
+            .toLowerCase()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '');
 
         let puntuacion = 0;
 
-        /*
-         * Coincidencias individuales.
-         */
-
         for (const palabra of palabras) {
-
           if (texto.includes(palabra)) {
             puntuacion += 10;
           }
-
         }
 
-        /*
-         * Coincidencia de toda la búsqueda.
-         */
-
-        if (busqueda && texto.includes(busqueda)) {
-          puntuacion += 30;
+        // Para nombres concretos, exigir coincidencia.
+        if (
+          busqueda === 'doraemon' &&
+          texto.includes('doraemon')
+        ) {
+          puntuacion += 100;
         }
 
-        /*
-         * El título tiene más peso que la URL.
-         */
-
-        const tituloNormalizado = normalizar(titulo);
-
-        for (const palabra of palabras) {
-
-          if (tituloNormalizado.includes(palabra)) {
-            puntuacion += 15;
-          }
-
-        }
-
-        /*
-         * Penalizar resultados claramente extraños.
-         */
-
-        const dominiosMalos = [
+        // Penalizar dominios/resultados conocidos como irrelevantes.
+        const malas = [
           'animalia.bio',
           'hikingadventures.net',
+          'alpine-ibex',
           'walmartimages.com'
         ];
 
-        for (const dominio of dominiosMalos) {
-
-          if (texto.includes(dominio)) {
-            puntuacion -= 50;
+        for (const mala of malas) {
+          if (texto.includes(mala)) {
+            puntuacion -= 100;
           }
-
         }
 
-        if (puntuacion > mejorPuntuacion) {
-
-          mejorPuntuacion = puntuacion;
-
-          mejor = {
-            url: imageUrl,
-            titulo: titulo
-          };
-
-        }
-
+        candidatos.push({
+          ...resultado,
+          puntuacion
+        });
       }
 
-      /*
-       * =========================================================
-       * NO MOSTRAR RESULTADOS SIN RELEVANCIA
-       * =========================================================
-       */
+      candidatos.sort(
+        (a, b) => b.puntuacion - a.puntuacion
+      );
 
-      if (!mejor || mejorPuntuacion < 0) {
+      const mejor = candidatos[0];
 
+      console.log(
+        `[MMM-TuAsistente] Mejor resultado (${mejor.puntuacion}): ${mejor.url}`
+      );
+
+      // =========================================================
+      // NO MOSTRAR IMÁGENES SIN RELACIÓN
+      // =========================================================
+
+      if (mejor.puntuacion <= 0) {
         console.error(
-          `[MMM-TuAsistente] No hay una imagen suficientemente relevante para: ${query}`
+          `[MMM-TuAsistente] Ningún resultado suficientemente relacionado con: ${busqueda}`
         );
 
         return null;
       }
 
       console.log(
-        `[MMM-TuAsistente] Imagen seleccionada (${mejorPuntuacion}): ${mejor.url}`
-      );
-
-      console.log(
-        `[MMM-TuAsistente] Título: ${mejor.titulo}`
+        `[MMM-TuAsistente] Imagen seleccionada para "${busqueda}": ${mejor.url}`
       );
 
       return mejor.url;
@@ -397,7 +438,7 @@ module.exports = NodeHelper.create({
     } catch (error) {
 
       console.error(
-        '[MMM-TuAsistente] Error buscando imagen con DuckDuckGo:',
+        '[MMM-TuAsistente] Error buscando imagen:',
         error.message
       );
 
@@ -484,146 +525,20 @@ module.exports = NodeHelper.create({
       return [];
     }
   },
-async buscarYouTube(query) {
-  const { execFile } = require('child_process');
-  const path = require('path');
+  buscarYouTube(query, callback) {
+    const ytDlpBin = path.join(__dirname, 'venv', 'bin', 'yt-dlp');
+    const cmd = `"${ytDlpBin}" "ytsearch1:${query}" --get-id --no-warnings`;
 
-  const ytDlpBin = path.join(
-    __dirname,
-    'venv',
-    'bin',
-    'yt-dlp'
-  );
-
-  // Limpiar la consulta
-  let busqueda = String(query || '')
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/\bmu[eé]strame\b/gi, '')
-    .replace(/\bmuestrame\b/gi, '')
-    .replace(/\bens[eé]name\b/gi, '')
-    .replace(/\bensename\b/gi, '')
-    .replace(/\bmostrar\b/gi, '')
-    .replace(/\bmuestra\b/gi, '')
-    .replace(/\bquiero\b/gi, '')
-    .replace(/\bver\b/gi, '')
-    .replace(/\bpon\b/gi, '')
-    .replace(/\bdame\b/gi, '')
-    .replace(/\bun video\b/gi, '')
-    .replace(/\bun vídeo\b/gi, '')
-    .replace(/\bvideo\b/gi, '')
-    .replace(/\bvídeo\b/gi, '')
-    .replace(/\bde\b/gi, ' ')
-    .replace(/\ben youtube\b/gi, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-
-  // Correcciones de reconocimiento de voz
-  busqueda = busqueda
-    .replace(/\bdorayemon\b/gi, 'doraemon')
-    .replace(/\bdorayem[oó]n\b/gi, 'doraemon')
-    .replace(/\bdoraem[oó]n\b/gi, 'doraemon')
-    .replace(/\borayno\b/gi, 'doraemon')
-    .replace(/\boraymon\b/gi, 'doraemon');
-
-  if (!busqueda) {
-    console.error(
-      '[MMM-TuAsistente] Búsqueda YouTube vacía.'
-    );
-    return null;
-  }
-
-  console.log(
-    `[MMM-TuAsistente] Búsqueda YouTube: ${busqueda}`
-  );
-
-  try {
-
-    const stdout = await new Promise((resolve, reject) => {
-
-      execFile(
-        ytDlpBin,
-        [
-          `ytsearch5:${busqueda}`,
-          '--flat-playlist',
-          '--print',
-          '%(id)s|%(title)s',
-          '--no-warnings',
-          '--ignore-errors'
-        ],
-        {
-          timeout: 30000,
-          maxBuffer: 1024 * 1024
-        },
-        (error, stdout) => {
-
-          if (!stdout || !stdout.trim()) {
-            reject(
-              error ||
-              new Error('YouTube no devolvió resultados')
-            );
-            return;
-          }
-
-          resolve(stdout);
-        }
-      );
-
+    exec(cmd, (error, stdout) => {
+      if (error || !stdout.trim()) {
+        console.error('[MMM-TuAsistente] Error al buscar en YouTube:', error);
+        callback(null);
+      } else {
+        callback(stdout.trim());
+      }
     });
+  },
 
-    const resultados = stdout
-      .split(/\r?\n/)
-      .map(linea => linea.trim())
-      .filter(Boolean);
-
-    console.log(
-      `[MMM-TuAsistente] Resultados YouTube: ${resultados.length}`
-    );
-
-    // Buscar el primer resultado con un ID válido
-    for (const linea of resultados) {
-
-      const separador = linea.indexOf('|');
-
-      if (separador === -1) {
-        continue;
-      }
-
-      const videoId =
-        linea.substring(0, separador).trim();
-
-      const titulo =
-        linea.substring(separador + 1).trim();
-
-      // ID normal de YouTube = 11 caracteres
-      if (!/^[A-Za-z0-9_-]{11}$/.test(videoId)) {
-        continue;
-      }
-
-      console.log(
-        `[MMM-TuAsistente] Vídeo seleccionado: ${videoId} - ${titulo}`
-      );
-
-      return videoId;
-    }
-
-    console.error(
-      '[MMM-TuAsistente] No se encontró ningún vídeo válido.'
-    );
-
-    return null;
-
-  } catch (error) {
-
-    console.error(
-      '[MMM-TuAsistente] Error al buscar en YouTube:',
-      error.message
-    );
-
-    return null;
-  }
-},
   async handleChat({ prompt }) {
     let lowerPrompt = prompt.toLowerCase();
 
@@ -859,177 +774,34 @@ async buscarYouTube(query) {
       return;
     }
 
-    // ==========================================================
     // 2. REPRODUCIR YOUTUBE
-    // ==========================================================
     if (
       lowerPrompt.includes('pon') ||
-      lowerPrompt.includes('ponme') ||
-      lowerPrompt.includes('pon un') ||
-      lowerPrompt.includes('pon el') ||
       lowerPrompt.includes('reproduce') ||
-      lowerPrompt.includes('reproducir') ||
-      lowerPrompt.includes('vídeo') ||
       lowerPrompt.includes('video') ||
       lowerPrompt.includes('youtube')
     ) {
-
-      let busqueda = lowerPrompt;
-
-      // ==========================================================
-      // LIMPIEZA ROBUSTA DE YOUTUBE
-      // ==========================================================
-
-      // Normalizar acentos
-      busqueda = busqueda.normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '');
-
-      // Frases completas de petición
-      busqueda = busqueda
-        .replace(/\bmu[eé]strame\b/gi, ' ')
-        .replace(/\bmu[eé]ltame\b/gi, ' ')
-        .replace(/\bmu[eé]strame\b/gi, ' ')
-        .replace(/\bens[eé]name\b/gi, ' ')
-        .replace(/\bens[eé]neme\b/gi, ' ')
-        .replace(/\bensena\b/gi, ' ')
-        .replace(/\benseñame\b/gi, ' ')
-        .replace(/\bmostrarme\b/gi, ' ')
-        .replace(/\bmostrar\b/gi, ' ')
-        .replace(/\bmuestra\b/gi, ' ')
-        .replace(/\bquiero\b/gi, ' ')
-        .replace(/\bquisiera\b/gi, ' ')
-        .replace(/\bme gustaria\b/gi, ' ')
-        .replace(/\bme gustaría\b/gi, ' ')
-        .replace(/\bdame\b/gi, ' ')
-        .replace(/\bponme\b/gi, ' ')
-        .replace(/\bpon\b/gi, ' ')
-        .replace(/\breproduce\b/gi, ' ')
-        .replace(/\breproduceme\b/gi, ' ')
-        .replace(/\bbusca\b/gi, ' ')
-        .replace(/\bbuscar\b/gi, ' ')
-        .replace(/\bver\b/gi, ' ')
-        .replace(/\bte\b/gi, ' ')
-
-        // Tipo de contenido
-        .replace(/\bun video\b/gi, ' ')
-        .replace(/\buna video\b/gi, ' ')
-        .replace(/\bel video\b/gi, ' ')
-        .replace(/\bla video\b/gi, ' ')
-        .replace(/\bvideo\b/gi, ' ')
-        .replace(/\bvideos\b/gi, ' ')
-        .replace(/\byoutube\b/gi, ' ')
-
-        // Conectores
-        .replace(/\bacerca de\b/gi, ' ')
-        .replace(/\bsobre\b/gi, ' ')
-        .replace(/\bdel\b/gi, ' ')
-        .replace(/\bde\b/gi, ' ')
-        .replace(/\buna\b/gi, ' ')
-        .replace(/\bun\b/gi, ' ')
-        .replace(/\bel\b/gi, ' ')
-        .replace(/\bla\b/gi, ' ')
-        .replace(/\blos\b/gi, ' ')
-        .replace(/\blas\b/gi, ' ')
-
-        // Posesivos
-        .replace(/\bmis\b/gi, ' ')
-        .replace(/\bmi\b/gi, ' ')
-
-        // Errores conocidos de Whisper
-        .replace(/\bdorayemon\b/gi, 'doraemon')
-        .replace(/\bdorayemon\b/gi, 'doraemon')
-        .replace(/\bdoraemon\b/gi, 'doraemon')
-        .replace(/\bdoraena\b/gi, 'doraemon')
-        .replace(/\bdoramon\b/gi, 'doraemon')
-        .replace(/\borayno\b/gi, 'doraemon')
-        .replace(/\boraymon\b/gi, 'doraemon')
-
-        // Letras sueltas que aparecen por errores de reconocimiento
-        .replace(/\be\b/gi, ' ')
-        .replace(/\by\b/gi, ' ')
-
-        // Puntuación
-        .replace(/[¿?¡!.,;:]+/g, ' ')
-
-        // Espacios
-        .replace(/\s+/g, ' ')
+      let busqueda = lowerPrompt
+        .replace(/pon/g, '')
+        .replace(/reproduce/g, '')
+        .replace(/un video de/g, '')
+        .replace(/el video de/g, '')
+        .replace(/video de/g, '')
+        .replace(/en youtube/g, '')
         .trim();
 
-      console.log(
-        `[MMM-TuAsistente] Búsqueda YouTube limpia: ${busqueda}`
-      );
-
       if (busqueda.length > 0) {
+        this.speakText(`Buscando ${busqueda} en YouTube`);
+        this.sendSocketNotification('ASSISTANT_RESPONSE', `Poniendo v�deo: ${busqueda}...`);
 
-        this.speakText(
-          `Buscando ${busqueda} en YouTube`
-        );
-
-        this.sendSocketNotification(
-          'ASSISTANT_RESPONSE',
-          `Buscando ${busqueda} en YouTube...`
-        );
-
-        try {
-
-          const videoId =
-            await this.buscarYouTube(busqueda);
-
+        this.buscarYouTube(busqueda, (videoId) => {
           if (videoId) {
-
-            console.log(
-              `[MMM-TuAsistente] PLAY_YOUTUBE: ${videoId}`
-            );
-
-            this.sendSocketNotification(
-              'PLAY_YOUTUBE',
-              {
-                videoId: videoId
-              }
-            );
-
+            this.sendSocketNotification('PLAY_YOUTUBE', { videoId: videoId });
           } else {
-
-            console.error(
-              `[MMM-TuAsistente] No se encontró vídeo válido para: ${busqueda}`
-            );
-
-            this.speakText(
-              `No he encontrado un vídeo de ${busqueda}`
-            );
-
-            this.sendSocketNotification(
-              'ASSISTANT_RESPONSE',
-              `No he encontrado un vídeo de ${busqueda}.`
-            );
-
-            this.sendSocketNotification(
-              'STATUS',
-              'ERROR'
-            );
+            this.speakText('No pude encontrar ese v�deo en YouTube');
+            this.sendSocketNotification('STATUS', 'ERROR');
           }
-
-        } catch (error) {
-
-          console.error(
-            '[MMM-TuAsistente] Error buscando YouTube:',
-            error.message
-          );
-
-          this.speakText(
-            'No pude encontrar un vídeo en YouTube'
-          );
-
-          this.sendSocketNotification(
-            'ASSISTANT_RESPONSE',
-            'No pude encontrar un vídeo en YouTube.'
-          );
-
-          this.sendSocketNotification(
-            'STATUS',
-            'ERROR'
-          );
-        }
+        });
 
         this.isThinking = false;
         return;
