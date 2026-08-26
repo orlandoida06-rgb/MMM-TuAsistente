@@ -1,29 +1,14 @@
-# Entornos virtuales y temporales de Python
+# Dependencias
+node_modules/
 venv/
-env/
-__pycache__/
-*.py[cod]
-
-# Modelos y archivos pesados de IA (ONNX, Piper, Kokoro)
-*.onnx
-*.bin
-piper_tts/
-
-# Grabaciones y pruebas de audio
-*.wav
-*.mp3
-/tmp/
-
-# Archivos de sistema y entorno
-.DS_Store
-.env
-
-# Python cache
 __pycache__/
 *.pyc
 
-# Backups
+# Copias de seguridad
 *.backup
+*.backup_*
+*.backup-*
 *.bak
-*.broken
-*.old
+*.bak_*
+*.bak-*
+*.bak_*
