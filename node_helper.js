@@ -25,6 +25,108 @@ module.exports = NodeHelper.create({
 
     this.keyListenerProcess = null;
     this.wakeWordProcess = null;
+
+    // Estado de reproducción de YouTube
+    this.youtubePlaying = false;
+
+    // ========================================================
+    // COMPROBAR MUTE AL ARRANCAR MAGICMIRROR
+    // ========================================================
+    // Esperamos a que PipeWire/WirePlumber esté disponible
+    // y mostramos el estado real del mute en pantalla.
+    // ========================================================
+
+    setTimeout(() => {
+      this.comprobarMuteAlArrancar();
+    }, 3000);
+  },
+
+  // ========================================================
+  // DETECTAR MUTE AL ARRANCAR
+  // ========================================================
+  comprobarMuteAlArrancar() {
+
+    exec(
+      "wpctl get-volume @DEFAULT_AUDIO_SINK@",
+      (error, stdout) => {
+
+        if (error) {
+          console.error(
+            '[MMM-TuAsistente] No se pudo comprobar el mute al arrancar:',
+            error.message
+          );
+          return;
+        }
+
+        const texto = stdout.trim();
+
+        console.log(
+          `[MMM-TuAsistente] wpctl al arrancar: ${texto}`
+        );
+
+        // --------------------------------------------------------
+        // OBTENER VOLUMEN
+        // --------------------------------------------------------
+
+        const match = texto.match(
+          /Volume:\s*([0-9.]+)/
+        );
+
+        if (!match) {
+          console.error(
+            '[MMM-TuAsistente] No se pudo interpretar el volumen:',
+            texto
+          );
+          return;
+        }
+
+        const volumen = Math.round(
+          parseFloat(match[1]) * 100
+        );
+
+        // --------------------------------------------------------
+        // DETECTAR MUTE
+        // --------------------------------------------------------
+        // wpctl devuelve:
+        //
+        // Volume: 0.90 [MUTED]
+        //
+        // Comprobamos MUTED directamente.
+
+        const muted = texto.toUpperCase().includes('[MUTED]');
+
+        console.log(
+          `[MMM-TuAsistente] Estado al arrancar: volumen=${volumen}% mute=${muted}`
+        );
+
+        // --------------------------------------------------------
+        // MOSTRAR SOLO SI ESTÁ MUTEADO
+        // --------------------------------------------------------
+
+        if (muted) {
+
+          this.sendSocketNotification(
+            'VOLUME_STATUS',
+            {
+              text: '🔇 Silenciado',
+              volume: volumen,
+              muted: true
+            }
+          );
+
+          console.log(
+            '[MMM-TuAsistente] 🔇 Mute detectado al arrancar. Mostrando indicador.'
+          );
+
+        } else {
+
+          console.log(
+            '[MMM-TuAsistente] 🔊 Audio normal al arrancar. No se muestra indicador.'
+          );
+
+        }
+      }
+    );
   },
 
   stopAudio() {
@@ -1448,6 +1550,9 @@ async buscarYouTube(query) {
             console.log(
               `[MMM-TuAsistente] YouTube fullscreen: ${fullscreenYouTube}`
             );
+
+            // Marcar YouTube como reproduciéndose
+            this.youtubePlaying = true;
 
             this.sendSocketNotification(
               'PLAY_YOUTUBE',
