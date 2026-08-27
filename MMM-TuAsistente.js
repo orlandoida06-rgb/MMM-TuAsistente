@@ -744,19 +744,32 @@ Module.register("MMM-TuAsistente", {
         icon
       );
 
-      volumeCircle.appendChild(
-        percentageEl
-      );
+      // En mute solo mostramos el icono.
+      // No mostrar porcentaje ni texto.
+      if (!this.volumeMuted) {
 
-      volumeCircle.appendChild(
-        label
-      );
+        volumeCircle.appendChild(
+          percentageEl
+        );
+
+        volumeCircle.appendChild(
+          label
+        );
+      }
 
       volumeIndicator.appendChild(
         volumeCircle
       );
 
-      wrapper.appendChild(
+      // El indicador de volumen es independiente del asistente.
+      // Se coloca directamente en el DOM del m\xF3dulo.
+      volumeIndicator.style.position = "fixed";
+      volumeIndicator.style.right = "5px";
+      volumeIndicator.style.bottom = "5px";
+      volumeIndicator.style.top = "auto";
+      volumeIndicator.style.left = "auto";
+
+      document.body.appendChild(
         volumeIndicator
       );
     }

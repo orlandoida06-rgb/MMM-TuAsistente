@@ -665,3 +665,69 @@
     height: 300px;
   }
 }
+
+/* ==========================================================
+   ICONO MUTE GRANDE
+   ========================================================== */
+
+.volume-circle.muted .volume-icon {
+  font-size: 72px;
+  margin: 0;
+  line-height: 1;
+}
+
+/* ==========================================================
+   MUTE SIN PORCENTAJE NI TEXTO
+   ========================================================== */
+
+.volume-circle.muted .volume-percentage,
+.volume-circle.muted .volume-label {
+  display: none;
+}
+
+/* ==========================================================
+   MISMA POSICIÓN PARA MUTE Y VOLUMEN
+   ========================================================== */
+
+.tu-asistente-volume {
+  position: fixed !important;
+  right: 20px !important;
+  bottom: 20px !important;
+}
+
+/* ==========================================================
+   POSICIÓN FINAL DEL INDICADOR DE VOLUMEN
+   ========================================================== */
+
+.tu-asistente-volume {
+  position: fixed !important;
+  right: 20px !important;
+  bottom: 5px !important;
+  top: auto !important;
+  left: auto !important;
+  margin: 0 !important;
+  transform-origin: center center;
+}
+
+/* ==========================================================
+   POSICIÓN DEL INDICADOR DE VOLUMEN
+   ========================================================== */
+
+.tu-asistente-volume {
+  position: fixed !important;
+  right: 20px !important;
+  bottom: 20px !important;
+  top: auto !important;
+  left: auto !important;
+  margin: 0 !important;
+}
+
+/* POSICIÓN FINAL: ESQUINA INFERIOR DERECHA */
+.tu-asistente-volume {
+  position: fixed !important;
+  right: 5px !important;
+  bottom: 5px !important;
+  top: auto !important;
+  left: auto !important;
+  margin: 0 !important;
+}
