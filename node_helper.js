@@ -137,6 +137,30 @@ module.exports = NodeHelper.create({
 
   // Procesador comÔøΩn para las salidas de texto transcrito (Servicio ÔøΩnico para PTT y Voz)
   handleTranscriptionOutput(output) {
+
+    // ========================================================
+    // SPACE DURANTE YOUTUBE
+    // ========================================================
+    // Si YouTube est√° reproduci√©ndose, la misma tecla SPACE
+    // que normalmente activa el PTT se utiliza para detenerlo.
+    // No iniciamos una nueva grabaci√≥n.
+    // ========================================================
+
+    if (output.includes('RECORD_START') && this.youtubePlaying) {
+
+      console.log(
+        '[MMM-TuAsistente] SPACE detectado durante YouTube -> detener v√≠deo'
+      );
+
+      this.sendSocketNotification(
+        'STOP_YOUTUBE'
+      );
+
+      this.youtubePlaying = false;
+
+      return;
+    }
+
     if (output.includes('RECORD_START')) {
       if (this.isSpeaking || this.isThinking) {
         this.stopAudio();
@@ -968,7 +992,7 @@ async buscarYouTube(query) {
             }
 
             console.log(
-              '[MMM-TuAsistente] Mute quitado autom·ticamente'
+              '[MMM-TuAsistente] Mute quitado automÔøΩticamente'
             );
 
             callback(null);
@@ -1181,11 +1205,11 @@ async buscarYouTube(query) {
       lowerPrompt.includes('subir el volumen') ||
       lowerPrompt.includes('aumenta el volumen') ||
       lowerPrompt.includes('aumentar el volumen') ||
-      lowerPrompt.includes('m·s volumen') ||
+      lowerPrompt.includes('mÔøΩs volumen') ||
       lowerPrompt.includes('mas volumen')
     ) {
 
-      // Si est· muteado, primero quitar mute
+      // Si estÔøΩ muteado, primero quitar mute
       quitarMuteSiNecesario(errorMute => {
 
         if (errorMute) {
@@ -1245,7 +1269,7 @@ async buscarYouTube(query) {
       lowerPrompt.includes('menos volumen')
     ) {
 
-      // Si est· muteado, primero quitar mute
+      // Si estÔøΩ muteado, primero quitar mute
       quitarMuteSiNecesario(errorMute => {
 
         if (errorMute) {
@@ -1414,10 +1438,22 @@ async buscarYouTube(query) {
               `[MMM-TuAsistente] PLAY_YOUTUBE: ${videoId}`
             );
 
+            // YouTube est√° reproduci√©ndose
+            this.youtubePlaying = true;
+
+            const fullscreenYouTube =
+              /\bpantalla\s+completa\b/i.test(prompt) ||
+              /\bfullscreen\b/i.test(prompt);
+
+            console.log(
+              `[MMM-TuAsistente] YouTube fullscreen: ${fullscreenYouTube}`
+            );
+
             this.sendSocketNotification(
               'PLAY_YOUTUBE',
               {
-                videoId: videoId
+                videoId: videoId,
+                fullscreen: fullscreenYouTube
               }
             );
 

@@ -42,6 +42,9 @@ Module.register("MMM-TuAsistente", {
     this.youtubePlayer = null;
     this.youtubeApiReady = false;
 
+    // Control de pantalla completa de YouTube
+    this.youtubeFullscreen = false;
+
     // --------------------------------------------------------
     // TEMPORIZADOR GENERAL
     // --------------------------------------------------------
@@ -406,7 +409,7 @@ Module.register("MMM-TuAsistente", {
           ? payload.query
           : "";
 
-      // Si no hay imagen v·lida, no mostrar nada
+      // Si no hay imagen vÔøΩlida, no mostrar nada
       if (!this.imageUrl) {
         this.currentState = "hidden";
         this.updateDom(200);
@@ -418,7 +421,7 @@ Module.register("MMM-TuAsistente", {
         this.imageUrl
       );
 
-      // Mostrar ˙nicamente la imagen
+      // Mostrar ÔøΩnicamente la imagen
       this.currentState = "image";
 
       this.userQuery = "";
@@ -427,7 +430,7 @@ Module.register("MMM-TuAsistente", {
       this.updateDom(300);
 
       // ======================================================
-      // OCULTAR IMAGEN AUTOM¡TICAMENTE
+      // OCULTAR IMAGEN AUTOMÔøΩTICAMENTE
       // ======================================================
 
       this.imageTimer = setTimeout(() => {
@@ -490,12 +493,46 @@ Module.register("MMM-TuAsistente", {
           : null;
 
 
+      this.youtubeFullscreen =
+        payload && payload.fullscreen
+          ? true
+          : false;
+
+
+      console.log(
+        "[MMM-TuAsistente] YouTube fullscreen:",
+        this.youtubeFullscreen
+      );
+
+
       this.currentState =
         "video";
 
       this.userQuery = "";
       this.assistantResponse = "";
 
+
+      /*
+       * FULLSCREEN REAL
+       *
+       * Se crea directamente en document.body
+       * para evitar los contenedores de MagicMirror.
+       */
+
+      if (
+        this.youtubeFullscreen &&
+        this.youtubeVideoId
+      ) {
+
+        this.createYouTubeFullscreen();
+
+        return;
+      }
+
+
+      /*
+       * YOUTUBE NORMAL
+       */
 
       this.updateDom(300);
 
@@ -519,6 +556,10 @@ Module.register("MMM-TuAsistente", {
       this.youtubeVideoId = null;
       this.youtubePlayer = null;
 
+      this.youtubeFullscreen = false;
+
+      this.removeYouTubeFullscreen();
+
 
       this.currentState =
         "hidden";
@@ -529,6 +570,150 @@ Module.register("MMM-TuAsistente", {
 
       this.updateDom(300);
     }
+  },
+
+
+  // ==========================================================
+  // YOUTUBE FULLSCREEN REAL
+  // ==========================================================
+
+  createYouTubeFullscreen: function () {
+
+    console.log(
+      "[MMM-TuAsistente] Creando fullscreen REAL"
+    );
+
+
+    // Eliminar cualquier fullscreen anterior
+
+    this.removeYouTubeFullscreen();
+
+
+    const overlay =
+      document.createElement("div");
+
+
+    overlay.id =
+      "tu-asistente-youtube-fullscreen";
+
+
+    Object.assign(
+      overlay.style,
+      {
+        position: "fixed",
+        top: "0",
+        left: "0",
+        width: "100vw",
+        height: "100vh",
+        margin: "0",
+        padding: "0",
+        background: "#000",
+        zIndex: "2147483647",
+        display: "block",
+        overflow: "hidden"
+      }
+    );
+
+
+    const iframe =
+      document.createElement("iframe");
+
+
+    iframe.className =
+      "youtube-iframe";
+
+
+    Object.assign(
+      iframe.style,
+      {
+        position: "absolute",
+        top: "0",
+        left: "0",
+        width: "100vw",
+        height: "100vh",
+        margin: "0",
+        padding: "0",
+        border: "0",
+        display: "block"
+      }
+    );
+
+
+    iframe.src =
+      "https://www.youtube.com/embed/" +
+      this.youtubeVideoId +
+      "?autoplay=1" +
+      "&controls=1" +
+      "&modestbranding=1" +
+      "&rel=0" +
+      "&enablejsapi=1" +
+      "&playsinline=1" +
+      "&origin=" +
+      encodeURIComponent(
+        window.location.origin
+      );
+
+
+    iframe.allow =
+      "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen";
+
+
+    iframe.allowFullscreen =
+      true;
+
+
+    iframe.referrerPolicy =
+      "strict-origin-when-cross-origin";
+
+
+    overlay.appendChild(
+      iframe
+    );
+
+
+    document.body.appendChild(
+      overlay
+    );
+
+
+    this.youtubeFullscreenElement =
+      overlay;
+
+
+    this.youtubeFullscreenIframe =
+      iframe;
+
+
+    console.log(
+      "[MMM-TuAsistente] Fullscreen a√±adido directamente a document.body"
+    );
+  },
+
+
+  // ==========================================================
+  // ELIMINAR YOUTUBE FULLSCREEN
+  // ==========================================================
+
+  removeYouTubeFullscreen: function () {
+
+    const overlay =
+      document.getElementById(
+        "tu-asistente-youtube-fullscreen"
+      );
+
+
+    if (overlay) {
+
+      overlay.remove();
+    }
+
+
+    this.youtubeFullscreenElement =
+      null;
+
+
+    this.youtubeFullscreenIframe =
+      null;
   },
 
 
@@ -602,7 +787,13 @@ Module.register("MMM-TuAsistente", {
 
 
     wrapper.className =
-      `asistente-container ${this.currentState}`;
+      `asistente-container ${this.currentState}` +
+      (
+        this.currentState === "video" &&
+        this.youtubeFullscreen
+          ? " youtube-fullscreen"
+          : ""
+      );
 
 
     // ========================================================
