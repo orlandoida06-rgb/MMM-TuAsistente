@@ -1,39 +1,104 @@
 Module.register("MMM-TuAsistente", {
+
   defaults: {
     model: "qwen2.5:1.5b",
     hideDelay: 5000
   },
 
+
+  // ==========================================================
+  // STYLES
+  // ==========================================================
+
   getStyles: function () {
     return ["MMM-TuAsistente.css"];
   },
 
+
+  // ==========================================================
+  // START
+  // ==========================================================
+
   start: function () {
+
     this.userQuery = "";
     this.assistantResponse = "";
+
     this.currentState = "hidden";
-    this.youtubeVideoId = null;
+
+    // --------------------------------------------------------
+    // IMAGEN
+    // --------------------------------------------------------
+
     this.imageUrl = null;
     this.imageQuery = "";
+    this.imageTimer = null;
+
+    // --------------------------------------------------------
+    // YOUTUBE
+    // --------------------------------------------------------
+
+    this.youtubeVideoId = null;
+    this.youtubePlayer = null;
+    this.youtubeApiReady = false;
+
+    // --------------------------------------------------------
+    // TEMPORIZADOR GENERAL
+    // --------------------------------------------------------
+
     this.hideTimer = null;
 
-    this.sendSocketNotification("INIT_CONFIG", this.config);
-this.youtubePlayer = null;
-this.youtubeApiReady = false;
+    // --------------------------------------------------------
+    // VOLUMEN
+    // --------------------------------------------------------
 
-if (!window.YT) {
-  const tag = document.createElement("script");
-  tag.src = "https://www.youtube.com/iframe_api";
-  document.head.appendChild(tag);
-}
+    this.volumeStatus = "";
+    this.volumeLevel = 0;
+    this.volumeMuted = false;
+    this.volumeTimer = null;
+    this.volumeCommandActive = false;
 
-window.onYouTubeIframeAPIReady = () => {
-  this.youtubeApiReady = true;
-};
+    // ========================================================
+    // CONFIG
+    // ========================================================
+
+    this.sendSocketNotification(
+      "INIT_CONFIG",
+      this.config
+    );
+
+
+    // ========================================================
+    // YOUTUBE API
+    // ========================================================
+
+    if (!window.YT) {
+
+      const tag =
+        document.createElement("script");
+
+      tag.src =
+        "https://www.youtube.com/iframe_api";
+
+      document.head.appendChild(tag);
+    }
+
+    window.onYouTubeIframeAPIReady = () => {
+
+      this.youtubeApiReady = true;
+
+    };
   },
 
+
+  // ==========================================================
+  // IMAGEN SEGÚN ESTADO
+  // ==========================================================
+
   getImageForState: function (state) {
+
     switch (state) {
+
       case "recording":
         return "images/recording.jpg";
 
@@ -45,252 +110,740 @@ window.onYouTubeIframeAPIReady = () => {
     }
   },
 
-  socketNotificationReceived: function (notification, payload) {
+
+  // ==========================================================
+  // SOCKET
+  // ==========================================================
+
+  socketNotificationReceived:
+    function (notification, payload) {
+
+
+    // ========================================================
+    // ESTADO
+    // ========================================================
 
     if (notification === "STATUS") {
 
-      if (payload.includes("Grabando")) {
+      // ------------------------------------------------------
+      // GRABANDO
+      // ------------------------------------------------------
+
+      if (
+        typeof payload === "string" &&
+        payload.includes("Grabando")
+      ) {
 
         if (this.hideTimer) {
+
           clearTimeout(this.hideTimer);
+          this.hideTimer = null;
         }
+
+
+        // Si empieza una nueva interacción,
+        // cancelar imagen anterior.
+
+        if (this.imageTimer) {
+
+          clearTimeout(this.imageTimer);
+          this.imageTimer = null;
+        }
+
+        this.imageUrl = null;
+        this.imageQuery = "";
+
 
         this.currentState = "recording";
+
         this.assistantResponse = "";
         this.userQuery = "";
+
+        this.updateDom(200);
       }
 
-      else if (payload.includes("Pensando")) {
+
+      // ------------------------------------------------------
+      // PENSANDO
+      // ------------------------------------------------------
+
+      else if (
+        typeof payload === "string" &&
+        payload.includes("Pensando")
+      ) {
 
         this.currentState = "thinking";
+
+        this.updateDom(200);
       }
 
-      else if (payload === "CANCELLED" || payload === "ERROR") {
+
+      // ------------------------------------------------------
+      // CANCELADO / ERROR
+      // ------------------------------------------------------
+
+      else if (
+        payload === "CANCELLED" ||
+        payload === "ERROR"
+      ) {
 
         if (this.hideTimer) {
+
           clearTimeout(this.hideTimer);
+          this.hideTimer = null;
         }
 
+
+        if (this.imageTimer) {
+
+          clearTimeout(this.imageTimer);
+          this.imageTimer = null;
+        }
+
+
+        this.imageUrl = null;
+        this.imageQuery = "";
+
+
         if (this.currentState !== "video") {
+
           this.currentState = "hidden";
         }
+
 
         this.userQuery = "";
         this.assistantResponse = "";
+
+        this.updateDom(200);
       }
+    }
+
+
+    // ========================================================
+    // VOLUMEN
+    // ========================================================
+
+    else if (
+      notification === "VOLUME_STATUS"
+    ) {
+
+      // ------------------------------------------------------
+      // RECIBIR VOLUMEN
+      // ------------------------------------------------------
+
+      this.volumeStatus =
+        payload && payload.text
+          ? payload.text
+          : "";
+
+
+      this.volumeMuted =
+        payload &&
+        payload.muted === true;
+
+
+      this.volumeLevel =
+        payload &&
+        Number.isFinite(
+          Number(payload.volume)
+        )
+          ? Number(payload.volume)
+          : 0;
+
+
+      // ------------------------------------------------------
+      // CANCELAR TEMPORIZADOR
+      // ------------------------------------------------------
+
+      if (this.volumeTimer) {
+
+        clearTimeout(this.volumeTimer);
+        this.volumeTimer = null;
+      }
+
+
+      // ------------------------------------------------------
+      // MOSTRAR INMEDIATAMENTE
+      // ------------------------------------------------------
+
+      this.updateDom(200);
+
+
+      // ------------------------------------------------------
+      // MUTE
+      //
+      // Si está silenciado NO desaparece.
+      // ------------------------------------------------------
+
+      if (this.volumeMuted) {
+
+        return;
+      }
+
+
+      // ------------------------------------------------------
+      // VOLUMEN NORMAL
+      //
+      // Desaparece después de 5 segundos.
+      // ------------------------------------------------------
+
+      if (this.volumeStatus) {
+
+        this.volumeTimer =
+          setTimeout(() => {
+
+            this.volumeStatus = "";
+            this.volumeTimer = null;
+
+            this.updateDom(200);
+
+          }, 5000);
+      }
+    }
+
+
+    // ========================================================
+    // PREGUNTA DEL USUARIO
+    // ========================================================
+
+    else if (
+      notification === "USER_QUERY"
+    ) {
+
+      this.userQuery =
+        payload || "";
 
       this.updateDom(200);
     }
 
 
-    else if (notification === "USER_QUERY") {
+    // ========================================================
+    // RESPUESTA DEL ASISTENTE
+    // ========================================================
 
-      this.userQuery = payload;
-      this.updateDom(200);
+   else if (
+  notification === "ASSISTANT_RESPONSE"
+) {
+
+  this.assistantResponse =
+    payload || "";
+
+  // ======================================================
+  // SI ES UNA ORDEN DE VOLUMEN
+  // NO CAMBIAR LA IMAGEN NI OCULTAR EL ASISTENTE
+  // ======================================================
+
+  if (this.volumeCommandActive) {
+
+    this.updateDom(200);
+
+    return;
+  }
+
+
+  // ======================================================
+  // COMPORTAMIENTO NORMAL
+  // ======================================================
+
+  if (
+    this.currentState !== "video" &&
+    this.currentState !== "image"
+  ) {
+
+    this.currentState =
+      "speaking";
+  }
+
+  this.updateDom(200);
+
+
+  if (
+    this.currentState !== "video" &&
+    this.currentState !== "image"
+  ) {
+
+    if (this.hideTimer) {
+      clearTimeout(this.hideTimer);
     }
 
+    this.hideTimer =
+      setTimeout(() => {
 
-    else if (notification === "ASSISTANT_RESPONSE") {
+        this.currentState =
+          "hidden";
 
-      this.assistantResponse = payload;
+        this.userQuery = "";
+        this.assistantResponse = "";
 
-      if (
-        this.currentState !== "video" &&
-        this.currentState !== "image"
-      ) {
-        this.currentState = "speaking";
+        this.updateDom(500);
+
+      }, this.config.hideDelay);
+  }
+}
+
+        // ========================================================
+    // MOSTRAR IMAGEN
+    // ========================================================
+
+    else if (
+      notification === "SHOW_IMAGE"
+    ) {
+
+      // Cancelar temporizador anterior
+      if (this.imageTimer) {
+        clearTimeout(this.imageTimer);
+        this.imageTimer = null;
       }
 
-      this.updateDom(200);
+      // Guardar imagen
+      this.imageUrl =
+        payload && payload.url
+          ? payload.url
+          : null;
 
-      if (
-        this.currentState !== "video" &&
-        this.currentState !== "image"
-      ) {
+      this.imageQuery =
+        payload && payload.query
+          ? payload.query
+          : "";
 
-        if (this.hideTimer) {
-          clearTimeout(this.hideTimer);
-        }
-
-        this.hideTimer = setTimeout(() => {
-
-          this.currentState = "hidden";
-          this.userQuery = "";
-          this.assistantResponse = "";
-
-          this.updateDom(500);
-
-        }, this.config.hideDelay);
+      // Si no hay imagen v�lida, no mostrar nada
+      if (!this.imageUrl) {
+        this.currentState = "hidden";
+        this.updateDom(200);
+        return;
       }
-    }
-
-
-    else if (notification === "SHOW_IMAGE") {
-
-      if (this.hideTimer) {
-        clearTimeout(this.hideTimer);
-      }
-
-      this.imageUrl = payload.url;
-      this.imageQuery = payload.query || "";
-
-      this.currentState = "image";
-
-      this.userQuery = "";
-      this.assistantResponse = "";
 
       console.log(
         "[MMM-TuAsistente] Mostrando imagen:",
         this.imageUrl
       );
 
-     this.updateDom(300);
-
-this.hideTimer = setTimeout(() => {
-
-  this.imageUrl = null;
-  this.imageQuery = "";
-
-  this.currentState = "hidden";
-
-  this.updateDom(300);
-
-}, 10000);
-    }
-
-
-    else if (notification === "PLAY_YOUTUBE") {
-
-      if (this.hideTimer) {
-        clearTimeout(this.hideTimer);
-      }
-
-      this.youtubeVideoId = payload.videoId;
-      this.currentState = "video";
+      // Mostrar �nicamente la imagen
+      this.currentState = "image";
 
       this.userQuery = "";
       this.assistantResponse = "";
 
       this.updateDom(300);
-setTimeout(() => {
-  this.initYouTubePlayer();
-}, 500);
+
+      // ======================================================
+      // OCULTAR IMAGEN AUTOM�TICAMENTE
+      // ======================================================
+
+      this.imageTimer = setTimeout(() => {
+
+        console.log(
+          "[MMM-TuAsistente] Ocultando imagen"
+        );
+
+        this.imageUrl = null;
+        this.imageQuery = "";
+
+        this.imageTimer = null;
+
+        // Volver al estado oculto
+        this.currentState = "hidden";
+
+        this.userQuery = "";
+        this.assistantResponse = "";
+
+        // IMPORTANTE:
+        // No tocar:
+        // this.volumeStatus
+        // this.volumeMuted
+        // this.volumeLevel
+
+        this.updateDom(300);
+
+      }, 10000);
+    }
+
+    // ========================================================
+    // YOUTUBE
+    // ========================================================
+
+    else if (
+      notification === "PLAY_YOUTUBE"
+    ) {
+
+      if (this.hideTimer) {
+
+        clearTimeout(this.hideTimer);
+        this.hideTimer = null;
+      }
+
+
+      if (this.imageTimer) {
+
+        clearTimeout(this.imageTimer);
+        this.imageTimer = null;
+      }
+
+
+      this.imageUrl = null;
+      this.imageQuery = "";
+
+
+      this.youtubeVideoId =
+        payload && payload.videoId
+          ? payload.videoId
+          : null;
+
+
+      this.currentState =
+        "video";
+
+      this.userQuery = "";
+      this.assistantResponse = "";
+
+
+      this.updateDom(300);
+
+
+      setTimeout(() => {
+
+        this.initYouTubePlayer();
+
+      }, 500);
     }
 
 
-    else if (notification === "STOP_YOUTUBE") {
+    // ========================================================
+    // DETENER YOUTUBE
+    // ========================================================
+
+    else if (
+      notification === "STOP_YOUTUBE"
+    ) {
 
       this.youtubeVideoId = null;
+      this.youtubePlayer = null;
 
-      this.currentState = "hidden";
+
+      this.currentState =
+        "hidden";
+
       this.userQuery = "";
       this.assistantResponse = "";
+
 
       this.updateDom(300);
     }
   },
 
-initYouTubePlayer: function () {
 
-  const iframe = document.querySelector(".youtube-iframe");
+  // ==========================================================
+  // YOUTUBE PLAYER
+  // ==========================================================
 
-  if (!iframe || !this.youtubeApiReady) {
-    return;
-  }
+  initYouTubePlayer: function () {
 
-  this.youtubePlayer = new YT.Player(iframe, {
+    const iframe =
+      document.querySelector(
+        ".youtube-iframe"
+      );
 
-    events: {
-      onStateChange: (event) => {
 
-        // 0 = vídeo terminado
-        if (event.data === YT.PlayerState.ENDED) {
+    if (
+      !iframe ||
+      !this.youtubeApiReady
+    ) {
 
-          this.youtubeVideoId = null;
-          this.youtubePlayer = null;
-
-          this.currentState = "hidden";
-          this.userQuery = "";
-          this.assistantResponse = "";
-
-          this.updateDom(300);
-        }
-      }
+      return;
     }
-  });
-},
+
+
+    this.youtubePlayer =
+      new YT.Player(
+        iframe,
+        {
+
+          events: {
+
+            onStateChange:
+              (event) => {
+
+              // 0 = vídeo terminado
+
+              if (
+                event.data ===
+                YT.PlayerState.ENDED
+              ) {
+
+                this.youtubeVideoId =
+                  null;
+
+                this.youtubePlayer =
+                  null;
+
+                this.currentState =
+                  "hidden";
+
+                this.userQuery = "";
+                this.assistantResponse = "";
+
+                this.updateDom(300);
+              }
+            }
+          }
+        }
+      );
+  },
+
+
+  // ==========================================================
+  // DOM
+  // ==========================================================
+
   getDom: function () {
 
-    const wrapper = document.createElement("div");
+    const wrapper =
+      document.createElement("div");
+
 
     wrapper.className =
       `asistente-container ${this.currentState}`;
 
 
-    /*
-     * YOUTUBE
-     *
-     * Cuando estamos en vídeo:
-     * - No mostramos imagen
-     * - No mostramos pregunta
-     * - No mostramos respuesta
-     * - Solo mostramos YouTube
-     */
+    // ========================================================
+    // INDICADOR DE VOLUMEN
+    // ========================================================
 
-    /*
-     * IMAGEN
-     *
-     * Mostramos directamente la imagen encontrada.
-     */
+    const showVolume =
+      this.volumeStatus ||
+      this.volumeMuted;
 
-    if (this.currentState === "image") {
 
-      if (this.imageUrl) {
+    if (showVolume) {
 
-        const imageContainer =
-          document.createElement("div");
+      // ------------------------------------------------------
+      // IMPORTANTE
+      //
+      // Si el asistente está hidden, el indicador de volumen
+      // debe seguir siendo visible.
+      // ------------------------------------------------------
 
-        imageContainer.className =
-          "assistant-image-container";
+      wrapper.classList.remove(
+        "hidden"
+      );
 
-        const image =
-          document.createElement("img");
 
-        image.className =
-          "assistant-image";
+      const volumeIndicator =
+        document.createElement("div");
 
-        image.src = this.imageUrl;
 
-        image.alt =
-          this.imageQuery || "Imagen";
+      volumeIndicator.className =
+        "tu-asistente-volume";
 
-        image.onload = () => {
-          console.log(
-            "[MMM-TuAsistente] Imagen cargada correctamente."
-          );
-        };
 
-        image.onerror = () => {
-          console.error(
-            "[MMM-TuAsistente] Error cargando imagen:",
-            this.imageUrl
-          );
-        };
+      // ------------------------------------------------------
+      // CÍRCULO
+      // ------------------------------------------------------
 
-        imageContainer.appendChild(image);
-        wrapper.appendChild(imageContainer);
+      const volumeCircle =
+        document.createElement("div");
+
+
+      volumeCircle.className =
+        "volume-circle";
+
+
+      // ------------------------------------------------------
+      // PORCENTAJE
+      // ------------------------------------------------------
+
+      const percentage =
+        Math.max(
+          0,
+          Math.min(
+            100,
+            Number(this.volumeLevel) || 0
+          )
+        );
+
+
+      // ------------------------------------------------------
+      // ARCO
+      // ------------------------------------------------------
+
+      volumeCircle.style.setProperty(
+        "--volume-angle",
+        `${percentage * 3.6}deg`
+      );
+
+
+      // ------------------------------------------------------
+      // MUTE
+      // ------------------------------------------------------
+
+      if (this.volumeMuted) {
+
+        volumeCircle.classList.add(
+          "muted"
+        );
       }
+
+
+      // ------------------------------------------------------
+      // ICONO
+      // ------------------------------------------------------
+
+      const icon =
+        document.createElement("div");
+
+
+      icon.className =
+        "volume-icon";
+
+
+      icon.textContent =
+        this.volumeMuted
+          ? "🔇"
+          : "🔊";
+
+
+      // ------------------------------------------------------
+      // PORCENTAJE
+      // ------------------------------------------------------
+
+      const percentageEl =
+        document.createElement("div");
+
+
+      percentageEl.className =
+        "volume-percentage";
+
+
+      percentageEl.textContent =
+        `${percentage}%`;
+
+
+      // ------------------------------------------------------
+      // TEXTO
+      // ------------------------------------------------------
+
+      const label =
+        document.createElement("div");
+
+
+      label.className =
+        "volume-label";
+
+
+      label.textContent =
+        this.volumeMuted
+          ? "SILENCIADO"
+          : "VOLUMEN";
+
+
+      // ------------------------------------------------------
+      // CONSTRUIR
+      // ------------------------------------------------------
+
+      volumeCircle.appendChild(
+        icon
+      );
+
+      volumeCircle.appendChild(
+        percentageEl
+      );
+
+      volumeCircle.appendChild(
+        label
+      );
+
+      volumeIndicator.appendChild(
+        volumeCircle
+      );
+
+      wrapper.appendChild(
+        volumeIndicator
+      );
+    }
+
+
+    // ========================================================
+    // IMAGEN DE BÚSQUEDA
+    // ========================================================
+
+    if (
+      this.currentState === "image" &&
+      this.imageUrl
+    ) {
+
+      const imageContainer =
+        document.createElement("div");
+
+
+      imageContainer.className =
+        "assistant-image-container";
+
+
+      const image =
+        document.createElement("img");
+
+
+      image.className =
+        "assistant-image";
+
+
+      image.src =
+        this.imageUrl;
+
+
+      image.alt =
+        this.imageQuery ||
+        "Imagen";
+
+
+      image.onload = () => {
+
+        console.log(
+          "[MMM-TuAsistente] Imagen cargada correctamente."
+        );
+      };
+
+
+      image.onerror = () => {
+
+        console.error(
+          "[MMM-TuAsistente] Error cargando imagen:",
+          this.imageUrl
+        );
+      };
+
+
+      imageContainer.appendChild(
+        image
+      );
+
+
+      wrapper.appendChild(
+        imageContainer
+      );
+
+
+      // IMPORTANTE:
+      // No seguimos procesando el contenido normal.
+      // La imagen tiene su propio ciclo de vida.
 
       return wrapper;
     }
 
 
-    if (this.currentState === "video") {
+    // ========================================================
+    // YOUTUBE
+    // ========================================================
+
+    if (
+      this.currentState === "video"
+    ) {
 
       if (this.youtubeVideoId) {
 
         const ytContainer =
           document.createElement("div");
+
 
         ytContainer.className =
           "youtube-container";
@@ -298,6 +851,7 @@ initYouTubePlayer: function () {
 
         const iframe =
           document.createElement("iframe");
+
 
         iframe.className =
           "youtube-iframe";
@@ -310,89 +864,117 @@ initYouTubePlayer: function () {
           `&modestbranding=1` +
           `&rel=0` +
           `&enablejsapi=1` +
-          `&origin=${encodeURIComponent(window.location.origin)}`;
+          `&origin=${encodeURIComponent(
+            window.location.origin
+          )}`;
 
 
         iframe.allow =
           "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture";
 
 
-        iframe.allowFullscreen = true;
+        iframe.allowFullscreen =
+          true;
+
 
         iframe.referrerPolicy =
           "strict-origin-when-cross-origin";
 
 
-        ytContainer.appendChild(iframe);
+        ytContainer.appendChild(
+          iframe
+        );
 
-        wrapper.appendChild(ytContainer);
+
+        wrapper.appendChild(
+          ytContainer
+        );
       }
 
+
       return wrapper;
     }
 
 
-    /*
-     * IMAGEN DEL ASISTENTE
-     *
-     * No se muestra cuando estamos en YouTube.
-     */
+    // ========================================================
+    // IMAGEN DEL ASISTENTE
+    // ========================================================
 
-    const iconContainer =
-      document.createElement("div");
+    // ========================================================
+    // IMAGEN DEL ASISTENTE
+    // ========================================================
 
-    iconContainer.className =
-      `icon-container ${this.currentState}`;
+    if (this.currentState !== "hidden") {
 
+      const iconContainer =
+        document.createElement("div");
 
-    const img =
-      document.createElement("img");
+      iconContainer.className =
+        `icon-container ${this.currentState}`;
 
-    img.src =
-      this.file(
-        this.getImageForState(this.currentState)
+      const img =
+        document.createElement("img");
+
+      img.src =
+        this.file(
+          this.getImageForState(
+            this.currentState
+          )
+        );
+
+      img.className =
+        "state-img";
+
+      iconContainer.appendChild(
+        img
       );
 
-    img.className =
-      "state-img";
+      wrapper.appendChild(
+        iconContainer
+      );
+    }
 
 
-    iconContainer.appendChild(img);
+    // ========================================================
+    // ESTADO OCULTO
+    // ========================================================
 
-    wrapper.appendChild(iconContainer);
+    if (
+      this.currentState === "hidden"
+    ) {
 
-
-    /*
-     * ESTADO OCULTO
-     */
-
-    if (this.currentState === "hidden") {
       return wrapper;
     }
 
 
-    /*
-     * CONSULTA DEL USUARIO
-     */
+
+    // ========================================================
+    // CONSULTA DEL USUARIO
+    // ========================================================
 
     if (this.userQuery) {
 
       const queryEl =
         document.createElement("div");
 
+
       queryEl.className =
         "user-query";
+
 
       queryEl.textContent =
         `"${this.userQuery}"`;
 
-      wrapper.appendChild(queryEl);
+
+      wrapper.appendChild(
+        queryEl
+      );
     }
 
 
-    /*
-     * RESPUESTA DE JARVIS
-     */
+    // ========================================================
+    // RESPUESTA DE JARVIS
+    // ========================================================
 
     if (
       this.assistantResponse &&
@@ -402,16 +984,22 @@ initYouTubePlayer: function () {
       const responseEl =
         document.createElement("div");
 
+
       responseEl.className =
         "assistant-response";
+
 
       responseEl.textContent =
         this.assistantResponse;
 
-      wrapper.appendChild(responseEl);
+
+      wrapper.appendChild(
+        responseEl
+      );
     }
 
 
     return wrapper;
   }
+
 });

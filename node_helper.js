@@ -846,19 +846,452 @@ async buscarYouTube(query) {
       return;
     }
 
-    // 1. DETENER YOUTUBE
+        // ==========================================================
+    // CONTROL DE VOLUMEN
+    // ==========================================================
+
+    const { execFile } = require('child_process');
+
+    // ----------------------------------------------------------
+    // OBTENER ESTADO ACTUAL DEL VOLUMEN
+    // ----------------------------------------------------------
+
+    const obtenerEstadoVolumen = (callback) => {
+
+      execFile(
+        'wpctl',
+        ['get-volume', '@DEFAULT_AUDIO_SINK@'],
+        (error, stdout) => {
+
+          if (error) {
+            console.error(
+              '[MMM-TuAsistente] Error obteniendo volumen:',
+              error.message
+            );
+            callback(error, null);
+            return;
+          }
+
+          const texto = stdout.trim();
+
+          const match = texto.match(
+            /Volume:\s*([0-9.]+)\s*(\[MUTED\])?/
+          );
+
+          if (!match) {
+            callback(
+              new Error('No se pudo interpretar el volumen'),
+              null
+            );
+            return;
+          }
+
+          const volumen = Math.round(
+            parseFloat(match[1]) * 100
+          );
+
+          const muted = !!match[2];
+
+          callback(null, {
+            volume: volumen,
+            muted: muted
+          });
+        }
+      );
+    };
+
+    // ----------------------------------------------------------
+    // MOSTRAR VOLUMEN EN PANTALLA
+    // ----------------------------------------------------------
+
+    const actualizarVolumenPantalla = () => {
+
+      obtenerEstadoVolumen((error, estado) => {
+
+        if (error || !estado) {
+          return;
+        }
+
+        this.sendSocketNotification(
+          'VOLUME_STATUS',
+          {
+            text: estado.muted
+              ? '?? Silenciado'
+              : `?? Volumen ${estado.volume}%`,
+            volume: estado.volume,
+            muted: estado.muted
+          }
+        );
+      });
+    };
+
+    // ----------------------------------------------------------
+    // QUITAR MUTE SI ES NECESARIO
+    // ----------------------------------------------------------
+
+    const quitarMuteSiNecesario = (callback) => {
+
+      obtenerEstadoVolumen((error, estado) => {
+
+        if (error || !estado) {
+          callback(error);
+          return;
+        }
+
+        if (!estado.muted) {
+          callback(null);
+          return;
+        }
+
+        console.log(
+          '[MMM-TuAsistente] Volumen muteado ? quitando mute antes de modificarlo'
+        );
+
+        execFile(
+          'wpctl',
+          [
+            'set-mute',
+            '@DEFAULT_AUDIO_SINK@',
+            '0'
+          ],
+          errorMute => {
+
+            if (errorMute) {
+
+              console.error(
+                '[MMM-TuAsistente] Error quitando mute:',
+                errorMute.message
+              );
+
+              callback(errorMute);
+              return;
+            }
+
+            console.log(
+              '[MMM-TuAsistente] Mute quitado automáticamente'
+            );
+
+            callback(null);
+          }
+        );
+      });
+    };
+
+    // ==========================================================
+    // QUITAR SILENCIO
+    // ==========================================================
+
     if (
-      lowerPrompt.includes('quita el video') ||
-      lowerPrompt.includes('cierra youtube') ||
-      lowerPrompt.includes('para el video')
+      lowerPrompt.includes('quita el silencio') ||
+      lowerPrompt.includes('quitar el silencio') ||
+      lowerPrompt.includes('quita silencio') ||
+      lowerPrompt.includes('quitar silencio') ||
+      lowerPrompt.includes('desactiva el silencio') ||
+      lowerPrompt.includes('desactivar el silencio') ||
+      lowerPrompt.includes('activa el sonido') ||
+      lowerPrompt.includes('activar el sonido') ||
+      lowerPrompt.includes('enciende el sonido') ||
+      lowerPrompt.includes('enciende el audio') ||
+      lowerPrompt.includes('quita el mute') ||
+      lowerPrompt.includes('quitar el mute') ||
+      lowerPrompt.includes('desmutea') ||
+      lowerPrompt.includes('desmutear') ||
+      lowerPrompt.includes('desactivar mute')
     ) {
-      this.sendSocketNotification('STOP_YOUTUBE');
-      this.speakText('Vï¿½deo cerrado');
-      this.sendSocketNotification('ASSISTANT_RESPONSE', 'Vï¿½deo cerrado.');
+
+      console.log(
+        `[MMM-TuAsistente] Quitando silencio: ${lowerPrompt}`
+      );
+
+      execFile(
+        'wpctl',
+        [
+          'set-mute',
+          '@DEFAULT_AUDIO_SINK@',
+          '0'
+        ],
+        error => {
+
+          if (error) {
+
+            console.error(
+              '[MMM-TuAsistente] Error quitando silencio:',
+              error.message
+            );
+
+            return;
+          }
+
+          console.log(
+            '[MMM-TuAsistente] Silencio desactivado'
+          );
+
+          actualizarVolumenPantalla();
+        }
+      );
+
+      this.speakText('Sonido activado');
+
+      this.sendSocketNotification(
+        'ASSISTANT_RESPONSE',
+        'Sonido activado.'
+      );
+
       this.isThinking = false;
       return;
     }
 
+    // ==========================================================
+    // SILENCIAR
+    // ==========================================================
+
+    if (
+      lowerPrompt.includes('silencia') ||
+      lowerPrompt.includes('silencio') ||
+      lowerPrompt.includes('silenciar') ||
+      lowerPrompt.includes('mutea') ||
+      lowerPrompt.includes('mutear') ||
+      lowerPrompt.includes('poner en silencio') ||
+      lowerPrompt.includes('pon el silencio') ||
+      lowerPrompt.includes('pon silencio')
+    ) {
+
+      console.log(
+        `[MMM-TuAsistente] Silenciando: ${lowerPrompt}`
+      );
+
+      execFile(
+        'wpctl',
+        [
+          'set-mute',
+          '@DEFAULT_AUDIO_SINK@',
+          '1'
+        ],
+        error => {
+
+          if (error) {
+
+            console.error(
+              '[MMM-TuAsistente] Error silenciando:',
+              error.message
+            );
+
+            return;
+          }
+
+          console.log(
+            '[MMM-TuAsistente] Audio silenciado'
+          );
+
+          actualizarVolumenPantalla();
+        }
+      );
+
+      this.speakText('Volumen silenciado');
+
+      this.sendSocketNotification(
+        'ASSISTANT_RESPONSE',
+        'Volumen silenciado.'
+      );
+
+      this.isThinking = false;
+      return;
+    }
+
+    // ==========================================================
+    // VOLUMEN A UN PORCENTAJE
+    // ==========================================================
+
+    const volumenMatch = lowerPrompt.match(
+      /(?:volumen|sonido).{0,15}?(?:al|a|en)?\s*(\d{1,3})\s*(?:%|por ciento|porcentaje)?/
+    );
+
+    if (volumenMatch) {
+
+      let porcentaje = parseInt(
+        volumenMatch[1],
+        10
+      );
+
+      porcentaje = Math.max(
+        0,
+        Math.min(100, porcentaje)
+      );
+
+      const volumen = porcentaje / 100;
+
+      console.log(
+        `[MMM-TuAsistente] Volumen solicitado: ${porcentaje}%`
+      );
+
+      // Si estaba muteado, primero quitamos el mute
+      quitarMuteSiNecesario(errorMute => {
+
+        if (errorMute) {
+          return;
+        }
+
+        execFile(
+          'wpctl',
+          [
+            'set-volume',
+            '@DEFAULT_AUDIO_SINK@',
+            volumen.toString()
+          ],
+          error => {
+
+            if (error) {
+
+              console.error(
+                '[MMM-TuAsistente] Error ajustando volumen:',
+                error.message
+              );
+
+              return;
+            }
+
+            console.log(
+              `[MMM-TuAsistente] Volumen establecido: ${porcentaje}%`
+            );
+
+            actualizarVolumenPantalla();
+          }
+        );
+      });
+
+      this.speakText(
+        `Volumen al ${porcentaje} por ciento`
+      );
+
+      this.sendSocketNotification(
+        'ASSISTANT_RESPONSE',
+        `Volumen al ${porcentaje}%.`
+      );
+
+      this.isThinking = false;
+      return;
+    }
+
+    // ==========================================================
+    // SUBIR VOLUMEN
+    // ==========================================================
+
+    if (
+      lowerPrompt.includes('sube el volumen') ||
+      lowerPrompt.includes('subir el volumen') ||
+      lowerPrompt.includes('aumenta el volumen') ||
+      lowerPrompt.includes('aumentar el volumen') ||
+      lowerPrompt.includes('más volumen') ||
+      lowerPrompt.includes('mas volumen')
+    ) {
+
+      // Si está muteado, primero quitar mute
+      quitarMuteSiNecesario(errorMute => {
+
+        if (errorMute) {
+          return;
+        }
+
+        execFile(
+          'wpctl',
+          [
+            'set-volume',
+            '@DEFAULT_AUDIO_SINK@',
+            '10%+'
+          ],
+          error => {
+
+            if (error) {
+
+              console.error(
+                '[MMM-TuAsistente] Error aumentando volumen:',
+                error.message
+              );
+
+              return;
+            }
+
+            console.log(
+              '[MMM-TuAsistente] Volumen aumentado +10%'
+            );
+
+            actualizarVolumenPantalla();
+          }
+        );
+      });
+
+      this.speakText(
+        'Subiendo el volumen'
+      );
+
+      this.sendSocketNotification(
+        'ASSISTANT_RESPONSE',
+        'Subiendo el volumen.'
+      );
+
+      this.isThinking = false;
+      return;
+    }
+
+    // ==========================================================
+    // BAJAR VOLUMEN
+    // ==========================================================
+
+    if (
+      lowerPrompt.includes('baja el volumen') ||
+      lowerPrompt.includes('bajar el volumen') ||
+      lowerPrompt.includes('reduce el volumen') ||
+      lowerPrompt.includes('reducir el volumen') ||
+      lowerPrompt.includes('menos volumen')
+    ) {
+
+      // Si está muteado, primero quitar mute
+      quitarMuteSiNecesario(errorMute => {
+
+        if (errorMute) {
+          return;
+        }
+
+        execFile(
+          'wpctl',
+          [
+            'set-volume',
+            '@DEFAULT_AUDIO_SINK@',
+            '10%-'
+          ],
+          error => {
+
+            if (error) {
+
+              console.error(
+                '[MMM-TuAsistente] Error reduciendo volumen:',
+                error.message
+              );
+
+              return;
+            }
+
+            console.log(
+              '[MMM-TuAsistente] Volumen reducido -10%'
+            );
+
+            actualizarVolumenPantalla();
+          }
+        );
+      });
+
+      this.speakText(
+        'Bajando el volumen'
+      );
+
+      this.sendSocketNotification(
+        'ASSISTANT_RESPONSE',
+        'Bajando el volumen.'
+      );
+
+      this.isThinking = false;
+      return;
+    }
     // ==========================================================
     // 2. REPRODUCIR YOUTUBE
     // ==========================================================
