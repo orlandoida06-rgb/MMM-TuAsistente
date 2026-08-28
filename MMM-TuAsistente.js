@@ -782,6 +782,19 @@ Module.register("MMM-TuAsistente", {
 
   getDom: function () {
 
+      // ========================================================
+      // LIMPIAR INDICADOR DE VOLUMEN ANTERIOR
+      // ========================================================
+
+      const oldVolumeIndicator =
+        document.getElementById(
+          "mmm-tu-asistente-volume"
+        );
+
+      if (oldVolumeIndicator) {
+        oldVolumeIndicator.remove();
+      }
+
     const wrapper =
       document.createElement("div");
 
@@ -825,6 +838,9 @@ Module.register("MMM-TuAsistente", {
 
       volumeIndicator.className =
         "tu-asistente-volume";
+
+      volumeIndicator.id =
+        "mmm-tu-asistente-volume";
 
 
       // ------------------------------------------------------
