@@ -54,7 +54,6 @@ BASE_DIR="$(cd "$(dirname "$0")" && pwd)"
 CONFIG_PATH="$BASE_DIR/../../config/config.js"
 
 TITLE="MMM-TuAsistente"
-SIMULATION=false
 
 LANGUAGE="es"
 VOICE=""
@@ -80,18 +79,52 @@ SPOTIFY_REDIRECT_URI=""
 USE_GUI=false
 
 # ==============================================================================
-# DETECCIÓN DE INTERFAZ
+# MODO SIMULACIÓN
 # ==============================================================================
-# SSH / PuTTY siempre utiliza modo terminal.
-# El modo gráfico solo se activa desde una sesión local con DISPLAY o Wayland.
+# true = prueba segura: NO instala ni modifica nada
+# false = instalación real
 
-if [ -n "${SSH_TTY:-}" ] || [ -n "${SSH_CONNECTION:-}" ]; then
-    USE_GUI=false
-elif [ -n "${DISPLAY:-}" ] || [ -n "${WAYLAND_DISPLAY:-}" ]; then
-    USE_GUI=true
-else
-    USE_GUI=false
+SIMULATION=true
+
+# ==============================================================================
+# COMPROBAR MÓDULO
+# ==============================================================================
+
+if [ ! -f "$BASE_DIR/node_helper.js" ]; then
+
+    echo
+    echo -e "${RED}[ERROR] No se encontró node_helper.js${NC}"
+    echo
+    echo "Ejecuta:"
+    echo
+    echo "cd ~/MagicMirror/modules/MMM-TuAsistente"
+    echo "./install.sh"
+    echo
+    exit 1
+
 fi
+
+# ==============================================================================
+# DETECTAR INTERFAZ
+# ==============================================================================
+
+if [ "${1:-}" = "--tui" ]; then
+
+    USE_GUI=false
+
+elif [ "${1:-}" = "--gui" ]; then
+
+    USE_GUI=true
+
+elif [ -n "${DISPLAY:-}" ] || [ -n "${WAYLAND_DISPLAY:-}" ]; then
+
+    USE_GUI=true
+
+fi
+
+# ==============================================================================
+# ZENITY
+# ==============================================================================
 
 install_zenity()
 {
@@ -203,33 +236,26 @@ abort_install()
 # PROGRESO
 # ==============================================================================
 
-PROGRESS_PID=""
-PROGRESS_FIFO=""
-
 progress_start()
 {
     if [ "$USE_GUI" = true ]; then
 
-        PROGRESS_FIFO="/tmp/mmm-tu-asistente-progress-$$"
-
-        rm -f "$PROGRESS_FIFO"
-        mkfifo "$PROGRESS_FIFO"
-
+        (
+            echo "0"
+            echo "# Preparando instalación..."
+            sleep 1
+        ) |
         zenity --progress \
             --title="$TITLE" \
-            --text="Preparando instalación..." \
+            --text="Preparando..." \
             --percentage=0 \
             --auto-close \
+            --auto-kill \
             --width=650 \
-            < "$PROGRESS_FIFO" \
-            >/dev/null 2>&1 &
+            2>/dev/null &
 
         PROGRESS_PID=$!
 
-        exec 9>"$PROGRESS_FIFO"
-
-        echo "0" >&9
-        echo "# Preparando instalación..." >&9
     fi
 }
 
@@ -240,44 +266,26 @@ progress_update()
 
     if [ "$USE_GUI" = true ]; then
 
-        if [ -n "${PROGRESS_PID:-}" ] &&
-           kill -0 "$PROGRESS_PID" 2>/dev/null; then
-
-            echo "$percent" >&9
-            echo "# $text" >&9
+        if kill -0 "${PROGRESS_PID:-0}" 2>/dev/null; then
+            echo "$percent" > "/proc/$PROGRESS_PID/fd/0" 2>/dev/null || true
         fi
 
     else
 
         echo
         echo -e "${BLUE}[$percent%] $text${NC}"
+
     fi
 }
 
 progress_close()
 {
     if [ "$USE_GUI" = true ]; then
-
-        if [ -n "${PROGRESS_PID:-}" ] &&
-           kill -0 "$PROGRESS_PID" 2>/dev/null; then
-
-            echo "100" >&9
-            echo "# Instalación completada." >&9
-
-            sleep 1
-
-            exec 9>&-
-
-            wait "$PROGRESS_PID" 2>/dev/null || true
-        fi
-
-        rm -f "${PROGRESS_FIFO:-}"
-
-        PROGRESS_PID=""
-        PROGRESS_FIFO=""
+        kill "${PROGRESS_PID:-0}" 2>/dev/null || true
     fi
 }
 
+# ==============================================================================
 # CONFIRMACIÓN INICIAL
 # ==============================================================================
 
@@ -930,66 +938,72 @@ Se utilizará el dispositivo de audio predeterminado."
 configure_spotify()
 {
     SPOTIFY_ENABLED="false"
-    SPOTIFY_MODE=""
+    SPOTIFY_CLIENT_ID=""
+    SPOTIFY_CLIENT_SECRET=""
+    SPOTIFY_REDIRECT_URI=""
 
     if [ "$USE_GUI" = true ]; then
 
         if ! gui_question \
-            "¿Quieres activar Spotify?
+            "¿Quieres activar la integración con Spotify?
 
-No necesitas introducir usuario, contraseña,
-Client ID ni Client Secret.
-
-Se utilizará Spotify Connect mediante librespot.
-
-El dispositivo aparecerá en Spotify como:
-MMM-TuAsistente
-
-¿Quieres activar Spotify?"
+Podrás introducir las credenciales de Spotify en el siguiente paso."
         then
             return 0
         fi
 
         SPOTIFY_ENABLED="true"
 
-        SPOTIFY_MODE=$(
-            zenity --list \
+        SPOTIFY_DATA=$(
+            zenity --forms \
                 --title="$TITLE" \
-                --text="Selecciona el modo de Spotify:" \
-                --radiolist \
-                --column="" \
-                --column="ID" \
-                --column="Modo" \
-                TRUE "connect" "Spotify Connect - recomendado" \
-                --hide-column=2 \
-                --width=650 \
-                --height=300 \
+                --text="Introduce las credenciales de Spotify:" \
+                --add-entry="Client ID" \
+                --add-password="Client Secret" \
+                --add-entry="Redirect URI" \
+                --separator="|" \
+                --width=700 \
                 2>/dev/null
         )
 
-        [ -n "${SPOTIFY_MODE:-}" ] || return 0
+        [ -n "${SPOTIFY_DATA:-}" ] || abort_install
+
+        IFS='|' read -r \
+            SPOTIFY_CLIENT_ID \
+            SPOTIFY_CLIENT_SECRET \
+            SPOTIFY_REDIRECT_URI <<< "$SPOTIFY_DATA"
 
     else
 
         if whiptail \
             --title="$TITLE" \
             --yesno \
-            "¿Quieres activar Spotify?
-
-No necesitas introducir credenciales.
-
-Se utilizará Spotify Connect mediante librespot.
-
-El dispositivo aparecerá en Spotify como:
-
-    MMM-TuAsistente
-
-¿Quieres activar Spotify?" \
-            15 70
+            "¿Quieres activar Spotify?" \
+            10 60
         then
 
             SPOTIFY_ENABLED="true"
-            SPOTIFY_MODE="connect"
+
+            SPOTIFY_CLIENT_ID=$(whiptail \
+                --title="$TITLE" \
+                --inputbox \
+                "Client ID:" \
+                10 70 \
+                3>&1 1>&2 2>&3) || abort_install
+
+            SPOTIFY_CLIENT_SECRET=$(whiptail \
+                --title="$TITLE" \
+                --passwordbox \
+                "Client Secret:" \
+                10 70 \
+                3>&1 1>&2 2>&3) || abort_install
+
+            SPOTIFY_REDIRECT_URI=$(whiptail \
+                --title="$TITLE" \
+                --inputbox \
+                "Redirect URI:" \
+                10 70 \
+                3>&1 1>&2 2>&3) || abort_install
 
         fi
 
@@ -997,128 +1011,25 @@ El dispositivo aparecerá en Spotify como:
 
     if [ "$SPOTIFY_ENABLED" = "true" ]; then
 
-        echo
-        echo -e "${GREEN}[OK] Spotify seleccionado: Spotify Connect / librespot.${NC}"
-        echo -e "${BLUE}No se necesitan Client ID ni Client Secret.${NC}"
+        if [ -z "$SPOTIFY_CLIENT_ID" ] ||
+           [ -z "$SPOTIFY_CLIENT_SECRET" ] ||
+           [ -z "$SPOTIFY_REDIRECT_URI" ]
+        then
+
+            if [ "$USE_GUI" = true ]; then
+                gui_error "Debes completar todos los campos de Spotify."
+            fi
+
+            abort_install
+
+        fi
 
     fi
 }
-
 
 # ==============================================================================
 # GUARDAR SPOTIFY
 # ==============================================================================
-
-# ==============================================================================
-# INSTALAR SPOTIFY / LIBRESPOT
-# ==============================================================================
-
-install_spotify()
-{
-    echo
-    echo -e "${BLUE}[8/9] Preparando Spotify Connect...${NC}"
-
-    if [ "$SPOTIFY_ENABLED" != "true" ]; then
-        echo -e "${YELLOW}[INFO] Spotify desactivado.${NC}"
-        return 0
-    fi
-
-    if [ "$SIMULATION" = true ]; then
-
-        echo -e "${YELLOW}[SIMULACIÓN] Se comprobaría Librespot precompilado.${NC}"
-        echo -e "${YELLOW}[SIMULACIÓN] Arquitectura: aarch64.${NC}"
-        echo -e "${YELLOW}[SIMULACIÓN] Se crearía el servicio systemd.${NC}"
-        echo -e "${GREEN}[OK] Spotify Connect simulado.${NC}"
-
-        return 0
-    fi
-
-    # --------------------------------------------------------------
-    # LIBRESPOT PRECOMPILADO
-    # --------------------------------------------------------------
-
-    if [ "$(uname -m)" != "aarch64" ]; then
-        echo -e "${RED}[ERROR] Esta versión de Librespot requiere arquitectura aarch64.${NC}"
-        echo "[INFO] Arquitectura detectada: $(uname -m)"
-        abort_install
-    fi
-
-    LIBRESPOT_SOURCE="$BASE_DIR/binaries/librespot/aarch64/librespot"
-    LIBRESPOT_TARGET="/usr/local/bin/librespot"
-
-    if [ ! -f "$LIBRESPOT_SOURCE" ]; then
-        echo -e "${RED}[ERROR] No se encontró el binario precompilado de Librespot.${NC}"
-        echo
-        echo "Se esperaba:"
-        echo "$LIBRESPOT_SOURCE"
-        echo
-        echo "Asegúrate de que el repositorio contiene:"
-        echo "binaries/librespot/aarch64/librespot"
-        abort_install
-    fi
-
-    if [ ! -x "$LIBRESPOT_SOURCE" ]; then
-        echo "[INFO] Ajustando permisos del binario..."
-        chmod +x "$LIBRESPOT_SOURCE" || abort_install
-    fi
-
-    echo "[INFO] Instalando Librespot precompilado..."
-
-    sudo install -m 0755 \
-        "$LIBRESPOT_SOURCE" \
-        "$LIBRESPOT_TARGET" || abort_install
-
-    if [ ! -x "$LIBRESPOT_TARGET" ]; then
-        echo -e "${RED}[ERROR] No se pudo instalar Librespot.${NC}"
-        abort_install
-    fi
-
-    echo -e "${GREEN}[OK] Librespot precompilado instalado.${NC}"
-
-    echo "[INFO] Versión:"
-    "$LIBRESPOT_TARGET" --version 2>/dev/null || true
-
-    # --------------------------------------------------------------
-    # SERVICIO SYSTEMD
-    # --------------------------------------------------------------
-
-    sudo tee /etc/systemd/system/mmm-tu-asistente-spotify.service > /dev/null <<EOF2
-[Unit]
-Description=MMM-TuAsistente - Spotify Connect
-After=network-online.target pipewire.service
-Wants=network-online.target
-
-[Service]
-Type=simple
-User=pi
-Environment=XDG_RUNTIME_DIR=/run/user/1000
-ExecStart=/usr/local/bin/librespot --name "MMM-TuAsistente" --backend rodio
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-EOF2
-
-    sudo systemctl daemon-reload || abort_install
-    sudo systemctl enable mmm-tu-asistente-spotify.service || abort_install
-    sudo systemctl restart mmm-tu-asistente-spotify.service || abort_install
-
-    sleep 2
-
-    if ! systemctl is-active --quiet mmm-tu-asistente-spotify.service; then
-
-        echo -e "${RED}[ERROR] Spotify Connect no se pudo iniciar.${NC}"
-
-        sudo systemctl status \
-            mmm-tu-asistente-spotify.service \
-            --no-pager || true
-
-        abort_install
-    fi
-
-    echo -e "${GREEN}[OK] Spotify Connect activo.${NC}"
-}
 
 save_spotify()
 {
@@ -1166,7 +1077,7 @@ EOF2
 install_system_dependencies()
 {
     echo
-    echo -e "${BLUE}[1/9] Instalando dependencias del sistema...${NC}"
+    echo -e "${BLUE}[1/8] Instalando dependencias del sistema...${NC}"
 
     if [ "$SIMULATION" = true ]; then
         echo -e "${YELLOW}[SIMULACIÓN] Se omite apt-get update.${NC}"
@@ -1205,7 +1116,7 @@ install_system_dependencies()
 install_node()
 {
     echo
-    echo -e "${BLUE}[2/9] Comprobando Node.js y npm...${NC}"
+    echo -e "${BLUE}[2/8] Comprobando Node.js y npm...${NC}"
 
     if [ "$SIMULATION" = true ]; then
         echo -e "${YELLOW}[SIMULACIÓN] Se comprobaría Node.js y npm.${NC}"
@@ -1244,7 +1155,7 @@ install_node()
 install_node_dependencies()
 {
     echo
-    echo -e "${BLUE}[3/9] Instalando dependencias Node...${NC}"
+    echo -e "${BLUE}[3/8] Instalando dependencias Node...${NC}"
 
     if [ "$SIMULATION" = true ]; then
         echo -e "${YELLOW}[SIMULACIÓN] Se omite npm install axios.${NC}"
@@ -1265,7 +1176,7 @@ install_node_dependencies()
 install_python_environment()
 {
     echo
-    echo -e "${BLUE}[4/9] Preparando Python...${NC}"
+    echo -e "${BLUE}[4/8] Preparando Python...${NC}"
 
     if [ "$SIMULATION" = true ]; then
         echo -e "${YELLOW}[SIMULACIÓN] Se omite creación/modificación del entorno Python.${NC}"
@@ -1273,69 +1184,34 @@ install_python_environment()
         return 0
     fi
 
-    VENV_DIR="$BASE_DIR/venv"
+    if [ ! -d "$BASE_DIR/venv" ]; then
 
-    # --------------------------------------------------------------------------
-    # COMPROBAR VENV EXISTENTE
-    # --------------------------------------------------------------------------
-
-    if [ -d "$VENV_DIR" ]; then
-
-        if ! "$VENV_DIR/bin/python" -m pip --version >/dev/null 2>&1; then
-
-            echo -e "${YELLOW}[AVISO] El entorno Python existente no es válido.${NC}"
-            echo "[INFO] Recreando venv con Python $(python3 --version)..."
-
-            rm -rf "$VENV_DIR"
-
-        fi
-
-    fi
-
-    # --------------------------------------------------------------------------
-    # CREAR VENV
-    # --------------------------------------------------------------------------
-
-    if [ ! -d "$VENV_DIR" ]; then
-
-        echo "[INFO] Creando entorno virtual Python..."
-
-        python3 -m venv "$VENV_DIR" ||
+        python3 -m venv "$BASE_DIR/venv" ||
             abort_install
 
     fi
 
-    # --------------------------------------------------------------------------
-    # COMPROBACIÓN FINAL DE PIP
-    # --------------------------------------------------------------------------
+    source "$BASE_DIR/venv/bin/activate"
 
-    if ! "$VENV_DIR/bin/python" -m pip --version >/dev/null 2>&1; then
-
-        echo -e "${RED}[ERROR] pip no está disponible dentro del entorno Python.${NC}"
-        abort_install
-
-    fi
-
-    # --------------------------------------------------------------------------
-    # ACTIVAR ENTORNO
-    # --------------------------------------------------------------------------
-
-    source "$VENV_DIR/bin/activate"
-
-    # --------------------------------------------------------------------------
-    # ACTUALIZAR HERRAMIENTAS PYTHON
-    # --------------------------------------------------------------------------
-
-    python -m pip install         --upgrade         pip         setuptools         wheel         -q ||
+    python -m pip install \
+        --upgrade \
+        pip \
+        setuptools \
+        wheel \
+        -q ||
         abort_install
 
     echo -e "${GREEN}[OK] Entorno Python preparado.${NC}"
 }
 
+# ==============================================================================
+# PYTHON
+# ==============================================================================
+
 install_python_dependencies()
 {
     echo
-    echo -e "${BLUE}[5/9] Instalando librerías Python...${NC}"
+    echo -e "${BLUE}[5/8] Instalando librerías Python...${NC}"
 
     if [ "$SIMULATION" = true ]; then
         echo -e "${YELLOW}[SIMULACIÓN] Se omite pip install de las librerías Python.${NC}"
@@ -1364,7 +1240,7 @@ install_python_dependencies()
 install_openwakeword()
 {
     echo
-    echo -e "${BLUE}[6/9] Configuración de activación...${NC}"
+    echo -e "${BLUE}[6/8] Configuración de activación...${NC}"
 
     if [ "$SIMULATION" = true ]; then
         if [ "$MODE_CHOICE" = "wakeword" ]; then
@@ -1403,7 +1279,7 @@ install_openwakeword()
 install_piper()
 {
     echo
-    echo -e "${BLUE}[7/9] Preparando Piper TTS...${NC}"
+    echo -e "${BLUE}[7/8] Preparando Piper TTS...${NC}"
 
     if [ "$SIMULATION" = true ]; then
         echo -e "${YELLOW}[SIMULACIÓN] Se omite descarga/instalación de Piper.${NC}"
@@ -1681,74 +1557,126 @@ PY
 
 configure_magicmirror()
 {
-    if [ ! -f "$CONFIG_PATH" ]; then
-        echo -e "${RED}[ERROR] No se encontró config.js:${NC}"
-        echo "$CONFIG_PATH"
-        abort_install
+    if [ "$SIMULATION" = true ]; then
+        echo -e "${YELLOW}[SIMULACIÓN] Se omite cualquier modificación de config.js.${NC}"
+        echo -e "${GREEN}[OK] Configuración de MagicMirror simulada.${NC}"
+        return 0
     fi
+
+    [ -f "$CONFIG_PATH" ] || return
 
     ADD_CONFIG=false
 
     if [ "$USE_GUI" = true ]; then
-        if gui_question "¿Quieres añadir MMM-TuAsistente automáticamente a config.js?"; then
+
+        if gui_question \
+            "¿Quieres añadir MMM-TuAsistente automáticamente a config.js?"
+        then
             ADD_CONFIG=true
         fi
+
     else
-        if whiptail --title="$TITLE" --yesno "¿Quieres añadir MMM-TuAsistente automáticamente a config.js?" 10 70; then
+
+        if whiptail \
+            --title="$TITLE" \
+            --yesno \
+            "¿Quieres añadir MMM-TuAsistente automáticamente a config.js?" \
+            10 70
+        then
             ADD_CONFIG=true
         fi
+
     fi
 
-    [ "$ADD_CONFIG" = true ] || return 0
-
-    if [ "$SIMULATION" = true ]; then
-        echo -e "${YELLOW}[SIMULACIÓN] Se añadiría MMM-TuAsistente a config.js.${NC}"
-        return 0
-    fi
+    [ "$ADD_CONFIG" = true ] || return
 
     if grep -q 'module: "MMM-TuAsistente"' "$CONFIG_PATH"; then
-        echo -e "${YELLOW}[AVISO] MMM-TuAsistente ya está presente en config.js.${NC}"
-        return 0
+
+        if [ "$USE_GUI" = true ]; then
+            gui_info "MMM-TuAsistente ya está presente en config.js.
+
+No se ha añadido una segunda entrada."
+        else
+            echo -e "${YELLOW}[AVISO] MMM-TuAsistente ya está en config.js.${NC}"
+        fi
+
+        return
+
     fi
 
     BACKUP="$CONFIG_PATH.backup.$(date +%Y%m%d_%H%M%S)"
-    cp "$CONFIG_PATH" "$BACKUP" || abort_install
 
-    TEMP_CONFIG="/tmp/config_mmm_tuasistente_$$.js"
+    cp "$CONFIG_PATH" "$BACKUP" ||
+        abort_install
 
-    cat > "$TEMP_CONFIG" <<CONFIGBLOCK
-    {
-        module: "MMM-TuAsistente",
-        position: "middle_center",
-        config: {
-            language: "$LANGUAGE",
-            activationMode: "$MODE_CHOICE",
-            voice: "$VOICE",
-            wakeWordModel: "hey_mycroft",
-            wakeWordThreshold: 0.5,
-            micDeviceIndex: $MIC_INDEX,
-            keyboardDevice: "$KEYBOARD_PATH",
-            pttKey: "$PTT_KEY",
-            audioOutput: "$OUTPUT_DEVICE",
-            spotifyEnabled: $SPOTIFY_ENABLED,
-            model: "qwen2.5:1.5b",
-            hideDelay: 18000,
-            autoHideTimeout: 30000
-        }
-    },
-CONFIGBLOCK
+    TEMP_CONFIG="/tmp/config_mmm_tuasistente.js"
 
-    "$BASE_DIR/venv/bin/python" - "$CONFIG_PATH" "$TEMP_CONFIG" <<'PYTHON'
+    "$BASE_DIR/venv/bin/python" \
+        "$CONFIG_PATH" \
+        "$TEMP_CONFIG" \
+        "$LANGUAGE" \
+        "$VOICE" \
+        "$MODE_CHOICE" \
+        "$MIC_INDEX" \
+        "$KEYBOARD_PATH" \
+        "$PTT_KEY" \
+        "$OUTPUT_DEVICE" \
+        "$SPOTIFY_ENABLED" <<'PY'
+
 import sys
 
 config_path = sys.argv[1]
-block_path = sys.argv[2]
+output_path = sys.argv[2]
+language = sys.argv[3]
+voice = sys.argv[4]
+mode = sys.argv[5]
+mic = sys.argv[6]
+keyboard = sys.argv[7]
+ptt_key = sys.argv[8]
+output = sys.argv[9]
+spotify = sys.argv[10]
 
 with open(config_path, "r", encoding="utf-8") as f:
     content = f.read()
 
-with open(block_path, "r", encoding="utf-8") as f:
-    block = f.read()
+mic_js = "null" if mic == "null" else mic
+
+block = f'''
+    {{
+        module: "MMM-TuAsistente",
+        position: "middle_center",
+
+        config: {{
+
+            language: "{language}",
+
+            activationMode: "{mode}",
+
+            voice: "{voice}",
+
+            wakeWordModel: "hey_mycroft",
+
+            wakeWordThreshold: 0.5,
+
+            micDeviceIndex: {mic_js},
+
+            keyboardDevice: "{keyboard}",
+
+            pttKey: "{ptt_key}",
+
+            audioOutput: "{output}",
+
+            spotifyEnabled: {str(spotify == "true").lower()},
+
+            model: "qwen2.5:1.5b",
+
+            hideDelay: 18000,
+
+            autoHideTimeout: 30000
+
+        }}
+    }},
+'''
 
 marker = "modules: ["
 
@@ -1756,20 +1684,33 @@ if marker not in content:
     print("[ERROR] No se encontró modules: [")
     sys.exit(1)
 
-content = content.replace(marker, marker + "\n" + block, 1)
+content = content.replace(
+    marker,
+    marker + "\n" + block,
+    1
+)
 
-with open(config_path, "w", encoding="utf-8") as f:
+with open(output_path, "w", encoding="utf-8") as f:
     f.write(content)
-PYTHON
 
-    rm -f "$TEMP_CONFIG"
+PY
 
-    if grep -q 'module: "MMM-TuAsistente"' "$CONFIG_PATH"; then
-        echo -e "${GREEN}[OK] MMM-TuAsistente añadido a config.js.${NC}"
+    if [ -f "$TEMP_CONFIG" ] &&
+       grep -q 'MMM-TuAsistente' "$TEMP_CONFIG"
+    then
+
+        mv "$TEMP_CONFIG" "$CONFIG_PATH"
+
     else
-        echo -e "${RED}[ERROR] No se pudo modificar config.js.${NC}"
-        echo "[INFO] Copia de seguridad: $BACKUP"
+
+        rm -f "$TEMP_CONFIG"
+
+        if [ "$USE_GUI" = true ]; then
+            gui_error "No se pudo modificar config.js."
+        fi
+
         abort_install
+
     fi
 }
 
@@ -2027,35 +1968,26 @@ fi
 
 progress_start
 
-progress_update 11 "Fase 1/9 — Instalando dependencias del sistema..."
 install_system_dependencies
 
-progress_update 22 "Fase 2/9 — Comprobando Node.js y npm..."
 install_node
 
-progress_update 33 "Fase 3/9 — Instalando dependencias Node..."
 install_node_dependencies
 
-progress_update 44 "Fase 4/9 — Preparando Python..."
 install_python_environment
 
-progress_update 55 "Fase 5/9 — Instalando librerías Python..."
 install_python_dependencies
 
-progress_update 66 "Fase 6/9 — Configurando activación..."
 install_openwakeword
 
-progress_update 77 "Fase 7/9 — Preparando Piper TTS..."
 install_piper
-
-progress_update 88 "Fase 8/9 — Preparando Spotify Connect..."
-install_spotify
 
 # ==============================================================================
 # CONFIGURACIONES
-# ===============================================================================
+# ==============================================================================
 
-progress_update 100 "Fase 9/9 — Configurando TuAsistente..."
+echo
+echo -e "${BLUE}[8/8] Configurando TuAsistente...${NC}"
 
 configure_listen_key
 

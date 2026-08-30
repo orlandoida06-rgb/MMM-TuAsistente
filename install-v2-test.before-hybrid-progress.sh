@@ -54,7 +54,6 @@ BASE_DIR="$(cd "$(dirname "$0")" && pwd)"
 CONFIG_PATH="$BASE_DIR/../../config/config.js"
 
 TITLE="MMM-TuAsistente"
-SIMULATION=false
 
 LANGUAGE="es"
 VOICE=""
@@ -80,18 +79,52 @@ SPOTIFY_REDIRECT_URI=""
 USE_GUI=false
 
 # ==============================================================================
-# DETECCIÓN DE INTERFAZ
+# MODO SIMULACIÓN
 # ==============================================================================
-# SSH / PuTTY siempre utiliza modo terminal.
-# El modo gráfico solo se activa desde una sesión local con DISPLAY o Wayland.
+# true = prueba segura: NO instala ni modifica nada
+# false = instalación real
 
-if [ -n "${SSH_TTY:-}" ] || [ -n "${SSH_CONNECTION:-}" ]; then
-    USE_GUI=false
-elif [ -n "${DISPLAY:-}" ] || [ -n "${WAYLAND_DISPLAY:-}" ]; then
-    USE_GUI=true
-else
-    USE_GUI=false
+SIMULATION=false
+
+# ==============================================================================
+# COMPROBAR MÓDULO
+# ==============================================================================
+
+if [ ! -f "$BASE_DIR/node_helper.js" ]; then
+
+    echo
+    echo -e "${RED}[ERROR] No se encontró node_helper.js${NC}"
+    echo
+    echo "Ejecuta:"
+    echo
+    echo "cd ~/MagicMirror/modules/MMM-TuAsistente"
+    echo "./install.sh"
+    echo
+    exit 1
+
 fi
+
+# ==============================================================================
+# DETECTAR INTERFAZ
+# ==============================================================================
+
+if [ "${1:-}" = "--tui" ]; then
+
+    USE_GUI=false
+
+elif [ "${1:-}" = "--gui" ]; then
+
+    USE_GUI=true
+
+elif [ -n "${DISPLAY:-}" ] || [ -n "${WAYLAND_DISPLAY:-}" ]; then
+
+    USE_GUI=true
+
+fi
+
+# ==============================================================================
+# ZENITY
+# ==============================================================================
 
 install_zenity()
 {
@@ -1681,74 +1714,142 @@ PY
 
 configure_magicmirror()
 {
-    if [ ! -f "$CONFIG_PATH" ]; then
-        echo -e "${RED}[ERROR] No se encontró config.js:${NC}"
-        echo "$CONFIG_PATH"
-        abort_install
-    fi
+    [ -f "$CONFIG_PATH" ] || true
 
     ADD_CONFIG=false
 
     if [ "$USE_GUI" = true ]; then
-        if gui_question "¿Quieres añadir MMM-TuAsistente automáticamente a config.js?"; then
+
+        if gui_question \
+            "¿Quieres añadir MMM-TuAsistente automáticamente a config.js?"
+        then
             ADD_CONFIG=true
         fi
+
     else
-        if whiptail --title="$TITLE" --yesno "¿Quieres añadir MMM-TuAsistente automáticamente a config.js?" 10 70; then
+
+        if whiptail \
+            --title="$TITLE" \
+            --yesno \
+            "¿Quieres añadir MMM-TuAsistente automáticamente a config.js?" \
+            10 70
+        then
             ADD_CONFIG=true
         fi
+
     fi
 
-    [ "$ADD_CONFIG" = true ] || return 0
+    [ "$ADD_CONFIG" = true ] || return
 
     if [ "$SIMULATION" = true ]; then
+
+        if [ "$USE_GUI" = true ]; then
+            gui_info "SIMULACIÓN
+
+Se añadiría MMM-TuAsistente automáticamente a config.js.
+
+NO se modificará ningún archivo."
+        else
+            whiptail                 --title="$TITLE"                 --msgbox                 "SIMULACIÓN
+
+Se añadiría MMM-TuAsistente automáticamente a config.js.
+
+NO se modificará ningún archivo."                 12 70
+        fi
+
         echo -e "${YELLOW}[SIMULACIÓN] Se añadiría MMM-TuAsistente a config.js.${NC}"
+        echo -e "${GREEN}[OK] config.js protegido.${NC}"
+
         return 0
     fi
 
     if grep -q 'module: "MMM-TuAsistente"' "$CONFIG_PATH"; then
-        echo -e "${YELLOW}[AVISO] MMM-TuAsistente ya está presente en config.js.${NC}"
-        return 0
+
+        if [ "$USE_GUI" = true ]; then
+            gui_info "MMM-TuAsistente ya está presente en config.js.
+
+No se ha añadido una segunda entrada."
+        else
+            echo -e "${YELLOW}[AVISO] MMM-TuAsistente ya está en config.js.${NC}"
+        fi
+
+        return
+
     fi
 
     BACKUP="$CONFIG_PATH.backup.$(date +%Y%m%d_%H%M%S)"
-    cp "$CONFIG_PATH" "$BACKUP" || abort_install
 
-    TEMP_CONFIG="/tmp/config_mmm_tuasistente_$$.js"
+    cp "$CONFIG_PATH" "$BACKUP" ||
+        abort_install
 
-    cat > "$TEMP_CONFIG" <<CONFIGBLOCK
-    {
-        module: "MMM-TuAsistente",
-        position: "middle_center",
-        config: {
-            language: "$LANGUAGE",
-            activationMode: "$MODE_CHOICE",
-            voice: "$VOICE",
-            wakeWordModel: "hey_mycroft",
-            wakeWordThreshold: 0.5,
-            micDeviceIndex: $MIC_INDEX,
-            keyboardDevice: "$KEYBOARD_PATH",
-            pttKey: "$PTT_KEY",
-            audioOutput: "$OUTPUT_DEVICE",
-            spotifyEnabled: $SPOTIFY_ENABLED,
-            model: "qwen2.5:1.5b",
-            hideDelay: 18000,
-            autoHideTimeout: 30000
-        }
-    },
-CONFIGBLOCK
+    TEMP_CONFIG="/tmp/config_mmm_tuasistente.js"
 
-    "$BASE_DIR/venv/bin/python" - "$CONFIG_PATH" "$TEMP_CONFIG" <<'PYTHON'
+    "$BASE_DIR/venv/bin/python" \
+        "$CONFIG_PATH" \
+        "$TEMP_CONFIG" \
+        "$LANGUAGE" \
+        "$VOICE" \
+        "$MODE_CHOICE" \
+        "$MIC_INDEX" \
+        "$KEYBOARD_PATH" \
+        "$PTT_KEY" \
+        "$OUTPUT_DEVICE" \
+        "$SPOTIFY_ENABLED" <<'PY'
+
 import sys
 
 config_path = sys.argv[1]
-block_path = sys.argv[2]
+output_path = sys.argv[2]
+language = sys.argv[3]
+voice = sys.argv[4]
+mode = sys.argv[5]
+mic = sys.argv[6]
+keyboard = sys.argv[7]
+ptt_key = sys.argv[8]
+output = sys.argv[9]
+spotify = sys.argv[10]
 
 with open(config_path, "r", encoding="utf-8") as f:
     content = f.read()
 
-with open(block_path, "r", encoding="utf-8") as f:
-    block = f.read()
+mic_js = "null" if mic == "null" else mic
+
+block = f'''
+    {{
+        module: "MMM-TuAsistente",
+        position: "middle_center",
+
+        config: {{
+
+            language: "{language}",
+
+            activationMode: "{mode}",
+
+            voice: "{voice}",
+
+            wakeWordModel: "hey_mycroft",
+
+            wakeWordThreshold: 0.5,
+
+            micDeviceIndex: {mic_js},
+
+            keyboardDevice: "{keyboard}",
+
+            pttKey: "{ptt_key}",
+
+            audioOutput: "{output}",
+
+            spotifyEnabled: {str(spotify == "true").lower()},
+
+            model: "qwen2.5:1.5b",
+
+            hideDelay: 18000,
+
+            autoHideTimeout: 30000
+
+        }}
+    }},
+'''
 
 marker = "modules: ["
 
@@ -1756,20 +1857,33 @@ if marker not in content:
     print("[ERROR] No se encontró modules: [")
     sys.exit(1)
 
-content = content.replace(marker, marker + "\n" + block, 1)
+content = content.replace(
+    marker,
+    marker + "\n" + block,
+    1
+)
 
-with open(config_path, "w", encoding="utf-8") as f:
+with open(output_path, "w", encoding="utf-8") as f:
     f.write(content)
-PYTHON
 
-    rm -f "$TEMP_CONFIG"
+PY
 
-    if grep -q 'module: "MMM-TuAsistente"' "$CONFIG_PATH"; then
-        echo -e "${GREEN}[OK] MMM-TuAsistente añadido a config.js.${NC}"
+    if [ -f "$TEMP_CONFIG" ] &&
+       grep -q 'MMM-TuAsistente' "$TEMP_CONFIG"
+    then
+
+        mv "$TEMP_CONFIG" "$CONFIG_PATH"
+
     else
-        echo -e "${RED}[ERROR] No se pudo modificar config.js.${NC}"
-        echo "[INFO] Copia de seguridad: $BACKUP"
+
+        rm -f "$TEMP_CONFIG"
+
+        if [ "$USE_GUI" = true ]; then
+            gui_error "No se pudo modificar config.js."
+        fi
+
         abort_install
+
     fi
 }
 

@@ -54,7 +54,6 @@ BASE_DIR="$(cd "$(dirname "$0")" && pwd)"
 CONFIG_PATH="$BASE_DIR/../../config/config.js"
 
 TITLE="MMM-TuAsistente"
-SIMULATION=false
 
 LANGUAGE="es"
 VOICE=""
@@ -80,18 +79,52 @@ SPOTIFY_REDIRECT_URI=""
 USE_GUI=false
 
 # ==============================================================================
-# DETECCIÓN DE INTERFAZ
+# MODO SIMULACIÓN
 # ==============================================================================
-# SSH / PuTTY siempre utiliza modo terminal.
-# El modo gráfico solo se activa desde una sesión local con DISPLAY o Wayland.
+# true = prueba segura: NO instala ni modifica nada
+# false = instalación real
 
-if [ -n "${SSH_TTY:-}" ] || [ -n "${SSH_CONNECTION:-}" ]; then
-    USE_GUI=false
-elif [ -n "${DISPLAY:-}" ] || [ -n "${WAYLAND_DISPLAY:-}" ]; then
-    USE_GUI=true
-else
-    USE_GUI=false
+SIMULATION=false
+
+# ==============================================================================
+# COMPROBAR MÓDULO
+# ==============================================================================
+
+if [ ! -f "$BASE_DIR/node_helper.js" ]; then
+
+    echo
+    echo -e "${RED}[ERROR] No se encontró node_helper.js${NC}"
+    echo
+    echo "Ejecuta:"
+    echo
+    echo "cd ~/MagicMirror/modules/MMM-TuAsistente"
+    echo "./install.sh"
+    echo
+    exit 1
+
 fi
+
+# ==============================================================================
+# DETECTAR INTERFAZ
+# ==============================================================================
+
+if [ "${1:-}" = "--tui" ]; then
+
+    USE_GUI=false
+
+elif [ "${1:-}" = "--gui" ]; then
+
+    USE_GUI=true
+
+elif [ -n "${DISPLAY:-}" ] || [ -n "${WAYLAND_DISPLAY:-}" ]; then
+
+    USE_GUI=true
+
+fi
+
+# ==============================================================================
+# ZENITY
+# ==============================================================================
 
 install_zenity()
 {
@@ -1025,62 +1058,19 @@ install_spotify()
 
     if [ "$SIMULATION" = true ]; then
 
-        echo -e "${YELLOW}[SIMULACIÓN] Se comprobaría Librespot precompilado.${NC}"
-        echo -e "${YELLOW}[SIMULACIÓN] Arquitectura: aarch64.${NC}"
+        echo -e "${YELLOW}[SIMULACIÓN] Se comprobaría librespot.${NC}"
+        echo -e "${YELLOW}[SIMULACIÓN] Nombre: MMM-TuAsistente${NC}"
+        echo -e "${YELLOW}[SIMULACIÓN] Backend: rodio${NC}"
         echo -e "${YELLOW}[SIMULACIÓN] Se crearía el servicio systemd.${NC}"
         echo -e "${GREEN}[OK] Spotify Connect simulado.${NC}"
 
         return 0
     fi
 
-    # --------------------------------------------------------------
-    # LIBRESPOT PRECOMPILADO
-    # --------------------------------------------------------------
-
-    if [ "$(uname -m)" != "aarch64" ]; then
-        echo -e "${RED}[ERROR] Esta versión de Librespot requiere arquitectura aarch64.${NC}"
-        echo "[INFO] Arquitectura detectada: $(uname -m)"
+    if [ ! -x "/usr/local/bin/librespot" ]; then
+        echo -e "${RED}[ERROR] No se encontró librespot en /usr/local/bin/librespot.${NC}"
         abort_install
     fi
-
-    LIBRESPOT_SOURCE="$BASE_DIR/binaries/librespot/aarch64/librespot"
-    LIBRESPOT_TARGET="/usr/local/bin/librespot"
-
-    if [ ! -f "$LIBRESPOT_SOURCE" ]; then
-        echo -e "${RED}[ERROR] No se encontró el binario precompilado de Librespot.${NC}"
-        echo
-        echo "Se esperaba:"
-        echo "$LIBRESPOT_SOURCE"
-        echo
-        echo "Asegúrate de que el repositorio contiene:"
-        echo "binaries/librespot/aarch64/librespot"
-        abort_install
-    fi
-
-    if [ ! -x "$LIBRESPOT_SOURCE" ]; then
-        echo "[INFO] Ajustando permisos del binario..."
-        chmod +x "$LIBRESPOT_SOURCE" || abort_install
-    fi
-
-    echo "[INFO] Instalando Librespot precompilado..."
-
-    sudo install -m 0755 \
-        "$LIBRESPOT_SOURCE" \
-        "$LIBRESPOT_TARGET" || abort_install
-
-    if [ ! -x "$LIBRESPOT_TARGET" ]; then
-        echo -e "${RED}[ERROR] No se pudo instalar Librespot.${NC}"
-        abort_install
-    fi
-
-    echo -e "${GREEN}[OK] Librespot precompilado instalado.${NC}"
-
-    echo "[INFO] Versión:"
-    "$LIBRESPOT_TARGET" --version 2>/dev/null || true
-
-    # --------------------------------------------------------------
-    # SERVICIO SYSTEMD
-    # --------------------------------------------------------------
 
     sudo tee /etc/systemd/system/mmm-tu-asistente-spotify.service > /dev/null <<EOF2
 [Unit]
@@ -1100,25 +1090,19 @@ RestartSec=5
 WantedBy=multi-user.target
 EOF2
 
-    sudo systemctl daemon-reload || abort_install
-    sudo systemctl enable mmm-tu-asistente-spotify.service || abort_install
-    sudo systemctl restart mmm-tu-asistente-spotify.service || abort_install
+    sudo systemctl daemon-reload
+    sudo systemctl enable mmm-tu-asistente-spotify.service
+    sudo systemctl restart mmm-tu-asistente-spotify.service
 
-    sleep 2
-
-    if ! systemctl is-active --quiet mmm-tu-asistente-spotify.service; then
-
-        echo -e "${RED}[ERROR] Spotify Connect no se pudo iniciar.${NC}"
-
-        sudo systemctl status \
-            mmm-tu-asistente-spotify.service \
-            --no-pager || true
-
+    systemctl is-active --quiet mmm-tu-asistente-spotify.service ||
         abort_install
-    fi
 
     echo -e "${GREEN}[OK] Spotify Connect activo.${NC}"
 }
+
+# ==============================================================================
+# GUARDAR SPOTIFY
+# ==============================================================================
 
 save_spotify()
 {
@@ -1681,74 +1665,142 @@ PY
 
 configure_magicmirror()
 {
-    if [ ! -f "$CONFIG_PATH" ]; then
-        echo -e "${RED}[ERROR] No se encontró config.js:${NC}"
-        echo "$CONFIG_PATH"
-        abort_install
-    fi
+    [ -f "$CONFIG_PATH" ] || true
 
     ADD_CONFIG=false
 
     if [ "$USE_GUI" = true ]; then
-        if gui_question "¿Quieres añadir MMM-TuAsistente automáticamente a config.js?"; then
+
+        if gui_question \
+            "¿Quieres añadir MMM-TuAsistente automáticamente a config.js?"
+        then
             ADD_CONFIG=true
         fi
+
     else
-        if whiptail --title="$TITLE" --yesno "¿Quieres añadir MMM-TuAsistente automáticamente a config.js?" 10 70; then
+
+        if whiptail \
+            --title="$TITLE" \
+            --yesno \
+            "¿Quieres añadir MMM-TuAsistente automáticamente a config.js?" \
+            10 70
+        then
             ADD_CONFIG=true
         fi
+
     fi
 
-    [ "$ADD_CONFIG" = true ] || return 0
+    [ "$ADD_CONFIG" = true ] || return
 
     if [ "$SIMULATION" = true ]; then
+
+        if [ "$USE_GUI" = true ]; then
+            gui_info "SIMULACIÓN
+
+Se añadiría MMM-TuAsistente automáticamente a config.js.
+
+NO se modificará ningún archivo."
+        else
+            whiptail                 --title="$TITLE"                 --msgbox                 "SIMULACIÓN
+
+Se añadiría MMM-TuAsistente automáticamente a config.js.
+
+NO se modificará ningún archivo."                 12 70
+        fi
+
         echo -e "${YELLOW}[SIMULACIÓN] Se añadiría MMM-TuAsistente a config.js.${NC}"
+        echo -e "${GREEN}[OK] config.js protegido.${NC}"
+
         return 0
     fi
 
     if grep -q 'module: "MMM-TuAsistente"' "$CONFIG_PATH"; then
-        echo -e "${YELLOW}[AVISO] MMM-TuAsistente ya está presente en config.js.${NC}"
-        return 0
+
+        if [ "$USE_GUI" = true ]; then
+            gui_info "MMM-TuAsistente ya está presente en config.js.
+
+No se ha añadido una segunda entrada."
+        else
+            echo -e "${YELLOW}[AVISO] MMM-TuAsistente ya está en config.js.${NC}"
+        fi
+
+        return
+
     fi
 
     BACKUP="$CONFIG_PATH.backup.$(date +%Y%m%d_%H%M%S)"
-    cp "$CONFIG_PATH" "$BACKUP" || abort_install
 
-    TEMP_CONFIG="/tmp/config_mmm_tuasistente_$$.js"
+    cp "$CONFIG_PATH" "$BACKUP" ||
+        abort_install
 
-    cat > "$TEMP_CONFIG" <<CONFIGBLOCK
-    {
-        module: "MMM-TuAsistente",
-        position: "middle_center",
-        config: {
-            language: "$LANGUAGE",
-            activationMode: "$MODE_CHOICE",
-            voice: "$VOICE",
-            wakeWordModel: "hey_mycroft",
-            wakeWordThreshold: 0.5,
-            micDeviceIndex: $MIC_INDEX,
-            keyboardDevice: "$KEYBOARD_PATH",
-            pttKey: "$PTT_KEY",
-            audioOutput: "$OUTPUT_DEVICE",
-            spotifyEnabled: $SPOTIFY_ENABLED,
-            model: "qwen2.5:1.5b",
-            hideDelay: 18000,
-            autoHideTimeout: 30000
-        }
-    },
-CONFIGBLOCK
+    TEMP_CONFIG="/tmp/config_mmm_tuasistente.js"
 
-    "$BASE_DIR/venv/bin/python" - "$CONFIG_PATH" "$TEMP_CONFIG" <<'PYTHON'
+    "$BASE_DIR/venv/bin/python" \
+        "$CONFIG_PATH" \
+        "$TEMP_CONFIG" \
+        "$LANGUAGE" \
+        "$VOICE" \
+        "$MODE_CHOICE" \
+        "$MIC_INDEX" \
+        "$KEYBOARD_PATH" \
+        "$PTT_KEY" \
+        "$OUTPUT_DEVICE" \
+        "$SPOTIFY_ENABLED" <<'PY'
+
 import sys
 
 config_path = sys.argv[1]
-block_path = sys.argv[2]
+output_path = sys.argv[2]
+language = sys.argv[3]
+voice = sys.argv[4]
+mode = sys.argv[5]
+mic = sys.argv[6]
+keyboard = sys.argv[7]
+ptt_key = sys.argv[8]
+output = sys.argv[9]
+spotify = sys.argv[10]
 
 with open(config_path, "r", encoding="utf-8") as f:
     content = f.read()
 
-with open(block_path, "r", encoding="utf-8") as f:
-    block = f.read()
+mic_js = "null" if mic == "null" else mic
+
+block = f'''
+    {{
+        module: "MMM-TuAsistente",
+        position: "middle_center",
+
+        config: {{
+
+            language: "{language}",
+
+            activationMode: "{mode}",
+
+            voice: "{voice}",
+
+            wakeWordModel: "hey_mycroft",
+
+            wakeWordThreshold: 0.5,
+
+            micDeviceIndex: {mic_js},
+
+            keyboardDevice: "{keyboard}",
+
+            pttKey: "{ptt_key}",
+
+            audioOutput: "{output}",
+
+            spotifyEnabled: {str(spotify == "true").lower()},
+
+            model: "qwen2.5:1.5b",
+
+            hideDelay: 18000,
+
+            autoHideTimeout: 30000
+
+        }}
+    }},
+'''
 
 marker = "modules: ["
 
@@ -1756,20 +1808,33 @@ if marker not in content:
     print("[ERROR] No se encontró modules: [")
     sys.exit(1)
 
-content = content.replace(marker, marker + "\n" + block, 1)
+content = content.replace(
+    marker,
+    marker + "\n" + block,
+    1
+)
 
-with open(config_path, "w", encoding="utf-8") as f:
+with open(output_path, "w", encoding="utf-8") as f:
     f.write(content)
-PYTHON
 
-    rm -f "$TEMP_CONFIG"
+PY
 
-    if grep -q 'module: "MMM-TuAsistente"' "$CONFIG_PATH"; then
-        echo -e "${GREEN}[OK] MMM-TuAsistente añadido a config.js.${NC}"
+    if [ -f "$TEMP_CONFIG" ] &&
+       grep -q 'MMM-TuAsistente' "$TEMP_CONFIG"
+    then
+
+        mv "$TEMP_CONFIG" "$CONFIG_PATH"
+
     else
-        echo -e "${RED}[ERROR] No se pudo modificar config.js.${NC}"
-        echo "[INFO] Copia de seguridad: $BACKUP"
+
+        rm -f "$TEMP_CONFIG"
+
+        if [ "$USE_GUI" = true ]; then
+            gui_error "No se pudo modificar config.js."
+        fi
+
         abort_install
+
     fi
 }
 
