@@ -226,20 +226,43 @@ module.exports = NodeHelper.create({
       return;
     }
 
-    console.log('[MMM-TuAsistente] Iniciando servicio de activaci�n por Tecla/PTT...');
-    this.keyListenerProcess = spawn(pythonExec, [listenerScript]);
+    const keyboardDevice =
+      this.config.keyboardDevice || 'null';
+
+    console.log(
+      '[MMM-TuAsistente] Teclado PTT:',
+      keyboardDevice
+    );
+
+    console.log(
+      '[MMM-TuAsistente] Iniciando servicio de activación por Tecla/PTT...'
+    );
+
+    this.keyListenerProcess = spawn(
+      pythonExec,
+      [listenerScript],
+      {
+        env: {
+          ...process.env,
+          MMM_TUASISTENTE_KEYBOARD: keyboardDevice
+        }
+      }
+    );
 
     this.keyListenerProcess.stdout.on('data', (data) => {
       this.handleTranscriptionOutput(data.toString());
     });
 
     this.keyListenerProcess.stderr.on('data', (data) => {
-      console.error('[MMM-TuAsistente] Error en listener PTT:', data.toString());
+      console.error(
+        '[MMM-TuAsistente] Error en listener PTT:',
+        data.toString()
+      );
     });
   },
 
   // ==========================================
-  // OPCI�N 2: ESCUCHA POR VOZ (OPENWAKEWORD)
+  // OPCIÓN 2: ESCUCHA POR VOZ (OPENWAKEWORD)
   // ==========================================
   startWakeWordListener() {
     if (this.wakeWordProcess !== null) return;
