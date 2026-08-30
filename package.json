@@ -19,7 +19,7 @@
   "homepage": "https://github.com/orlandoida06-rgb/MMM-TuAssistente#readme",
   "dependencies": {
     "@mudbill/duckduckgo-images-api": "^2.0.1",
-    "axios": "^1.19.0",
+    "axios": "^1.20.0",
     "node-record-lpcm16": "^1.0.1"
   }
 }

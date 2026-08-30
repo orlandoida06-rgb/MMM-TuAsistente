@@ -79,52 +79,18 @@ SPOTIFY_REDIRECT_URI=""
 USE_GUI=false
 
 # ==============================================================================
-# MODO SIMULACIÓN
+# DETECCIÓN DE INTERFAZ
 # ==============================================================================
-# true = prueba segura: NO instala ni modifica nada
-# false = instalación real
+# SSH / PuTTY siempre utiliza modo terminal.
+# El modo gráfico solo se activa desde una sesión local con DISPLAY o Wayland.
 
-SIMULATION=false
-
-# ==============================================================================
-# COMPROBAR MÓDULO
-# ==============================================================================
-
-if [ ! -f "$BASE_DIR/node_helper.js" ]; then
-
-    echo
-    echo -e "${RED}[ERROR] No se encontró node_helper.js${NC}"
-    echo
-    echo "Ejecuta:"
-    echo
-    echo "cd ~/MagicMirror/modules/MMM-TuAsistente"
-    echo "./install.sh"
-    echo
-    exit 1
-
-fi
-
-# ==============================================================================
-# DETECTAR INTERFAZ
-# ==============================================================================
-
-if [ "${1:-}" = "--tui" ]; then
-
+if [ -n "${SSH_TTY:-}" ] || [ -n "${SSH_CONNECTION:-}" ]; then
     USE_GUI=false
-
-elif [ "${1:-}" = "--gui" ]; then
-
-    USE_GUI=true
-
 elif [ -n "${DISPLAY:-}" ] || [ -n "${WAYLAND_DISPLAY:-}" ]; then
-
     USE_GUI=true
-
+else
+    USE_GUI=false
 fi
-
-# ==============================================================================
-# ZENITY
-# ==============================================================================
 
 install_zenity()
 {
@@ -237,28 +203,32 @@ abort_install()
 # ==============================================================================
 
 PROGRESS_PID=""
+PROGRESS_FIFO=""
 
 progress_start()
 {
     if [ "$USE_GUI" = true ]; then
 
-        (
-            echo "0"
-            echo "# Preparando instalación..."
-            while true; do
-                sleep 3600
-            done
-        ) |
+        PROGRESS_FIFO="/tmp/mmm-tu-asistente-progress-$$"
+
+        rm -f "$PROGRESS_FIFO"
+        mkfifo "$PROGRESS_FIFO"
+
         zenity --progress \
             --title="$TITLE" \
             --text="Preparando instalación..." \
             --percentage=0 \
-            --auto-kill \
+            --auto-close \
             --width=650 \
-            2>/dev/null &
+            < "$PROGRESS_FIFO" \
+            >/dev/null 2>&1 &
 
         PROGRESS_PID=$!
 
+        exec 9>"$PROGRESS_FIFO"
+
+        echo "0" >&9
+        echo "# Preparando instalación..." >&9
     fi
 }
 
@@ -269,30 +239,44 @@ progress_update()
 
     if [ "$USE_GUI" = true ]; then
 
-        if kill -0 "${PROGRESS_PID:-0}" 2>/dev/null; then
-            {
-                echo "$percent"
-                echo "# $text"
-            } > "/proc/$PROGRESS_PID/fd/0" 2>/dev/null || true
+        if [ -n "${PROGRESS_PID:-}" ] &&
+           kill -0 "$PROGRESS_PID" 2>/dev/null; then
+
+            echo "$percent" >&9
+            echo "# $text" >&9
         fi
 
     else
 
         echo
         echo -e "${BLUE}[$percent%] $text${NC}"
-
     fi
 }
 
 progress_close()
 {
     if [ "$USE_GUI" = true ]; then
-        kill "${PROGRESS_PID:-0}" 2>/dev/null || true
+
+        if [ -n "${PROGRESS_PID:-}" ] &&
+           kill -0 "$PROGRESS_PID" 2>/dev/null; then
+
+            echo "100" >&9
+            echo "# Instalación completada." >&9
+
+            sleep 1
+
+            exec 9>&-
+
+            wait "$PROGRESS_PID" 2>/dev/null || true
+        fi
+
+        rm -f "${PROGRESS_FIFO:-}"
+
         PROGRESS_PID=""
+        PROGRESS_FIFO=""
     fi
 }
 
-# ==============================================================================
 # CONFIRMACIÓN INICIAL
 # ==============================================================================
 
@@ -1040,19 +1024,62 @@ install_spotify()
 
     if [ "$SIMULATION" = true ]; then
 
-        echo -e "${YELLOW}[SIMULACIÓN] Se comprobaría librespot.${NC}"
-        echo -e "${YELLOW}[SIMULACIÓN] Nombre: MMM-TuAsistente${NC}"
-        echo -e "${YELLOW}[SIMULACIÓN] Backend: rodio${NC}"
+        echo -e "${YELLOW}[SIMULACIÓN] Se comprobaría Librespot precompilado.${NC}"
+        echo -e "${YELLOW}[SIMULACIÓN] Arquitectura: aarch64.${NC}"
         echo -e "${YELLOW}[SIMULACIÓN] Se crearía el servicio systemd.${NC}"
         echo -e "${GREEN}[OK] Spotify Connect simulado.${NC}"
 
         return 0
     fi
 
-    if [ ! -x "/usr/local/bin/librespot" ]; then
-        echo -e "${RED}[ERROR] No se encontró librespot en /usr/local/bin/librespot.${NC}"
+    # --------------------------------------------------------------
+    # LIBRESPOT PRECOMPILADO
+    # --------------------------------------------------------------
+
+    if [ "$(uname -m)" != "aarch64" ]; then
+        echo -e "${RED}[ERROR] Esta versión de Librespot requiere arquitectura aarch64.${NC}"
+        echo "[INFO] Arquitectura detectada: $(uname -m)"
         abort_install
     fi
+
+    LIBRESPOT_SOURCE="$BASE_DIR/binaries/librespot/aarch64/librespot"
+    LIBRESPOT_TARGET="/usr/local/bin/librespot"
+
+    if [ ! -f "$LIBRESPOT_SOURCE" ]; then
+        echo -e "${RED}[ERROR] No se encontró el binario precompilado de Librespot.${NC}"
+        echo
+        echo "Se esperaba:"
+        echo "$LIBRESPOT_SOURCE"
+        echo
+        echo "Asegúrate de que el repositorio contiene:"
+        echo "binaries/librespot/aarch64/librespot"
+        abort_install
+    fi
+
+    if [ ! -x "$LIBRESPOT_SOURCE" ]; then
+        echo "[INFO] Ajustando permisos del binario..."
+        chmod +x "$LIBRESPOT_SOURCE" || abort_install
+    fi
+
+    echo "[INFO] Instalando Librespot precompilado..."
+
+    sudo install -m 0755 \
+        "$LIBRESPOT_SOURCE" \
+        "$LIBRESPOT_TARGET" || abort_install
+
+    if [ ! -x "$LIBRESPOT_TARGET" ]; then
+        echo -e "${RED}[ERROR] No se pudo instalar Librespot.${NC}"
+        abort_install
+    fi
+
+    echo -e "${GREEN}[OK] Librespot precompilado instalado.${NC}"
+
+    echo "[INFO] Versión:"
+    "$LIBRESPOT_TARGET" --version 2>/dev/null || true
+
+    # --------------------------------------------------------------
+    # SERVICIO SYSTEMD
+    # --------------------------------------------------------------
 
     sudo tee /etc/systemd/system/mmm-tu-asistente-spotify.service > /dev/null <<EOF2
 [Unit]
@@ -1072,19 +1099,25 @@ RestartSec=5
 WantedBy=multi-user.target
 EOF2
 
-    sudo systemctl daemon-reload
-    sudo systemctl enable mmm-tu-asistente-spotify.service
-    sudo systemctl restart mmm-tu-asistente-spotify.service
+    sudo systemctl daemon-reload || abort_install
+    sudo systemctl enable mmm-tu-asistente-spotify.service || abort_install
+    sudo systemctl restart mmm-tu-asistente-spotify.service || abort_install
 
-    systemctl is-active --quiet mmm-tu-asistente-spotify.service ||
+    sleep 2
+
+    if ! systemctl is-active --quiet mmm-tu-asistente-spotify.service; then
+
+        echo -e "${RED}[ERROR] Spotify Connect no se pudo iniciar.${NC}"
+
+        sudo systemctl status \
+            mmm-tu-asistente-spotify.service \
+            --no-pager || true
+
         abort_install
+    fi
 
     echo -e "${GREEN}[OK] Spotify Connect activo.${NC}"
 }
-
-# ==============================================================================
-# GUARDAR SPOTIFY
-# ==============================================================================
 
 save_spotify()
 {
