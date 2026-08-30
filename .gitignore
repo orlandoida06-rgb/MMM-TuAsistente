@@ -12,3 +12,26 @@ __pycache__/
 *.bak_*
 *.bak-*
 *.bak_*
+
+# Copias de seguridad locales
+*.before-*
+*.backup*
+*.broken
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Entornos Python
+venv/
+.venv/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Backups y archivos temporales de pruebas
+*.backup.*
+*.before-*
+*.broken
+

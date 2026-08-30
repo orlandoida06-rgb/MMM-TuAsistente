@@ -1142,6 +1142,7 @@ install_ollama_system()
 
     if [ "$SIMULATION" = true ]; then
         echo -e "${YELLOW}[SIMULACIÓN] Se instalaría Ollama.${NC}"
+        echo -e "${YELLOW}[SIMULACIÓN] Se prepararía llama-server.${NC}"
         echo -e "${YELLOW}[SIMULACIÓN] Se iniciaría el servidor Ollama.${NC}"
         return 0
     fi
@@ -1169,7 +1170,7 @@ install_ollama_system()
 
     fi
 
-    export PATH="/usr/local/bin:$PATH"
+    export PATH="/usr/local/bin:/usr/bin:/bin:$PATH"
 
     if ! command -v ollama >/dev/null 2>&1; then
         echo -e "${RED}[ERROR] El comando ollama no está disponible.${NC}"
@@ -1177,10 +1178,76 @@ install_ollama_system()
     fi
 
     # --------------------------------------------------------------------------
+    # Preparar llama-server
+    # --------------------------------------------------------------------------
+
+    echo
+    echo -e "${CYAN}[INFO] Comprobando llama-server...${NC}"
+
+    LLAMA_SERVER=""
+
+    for candidate in \
+        /usr/lib/ollama/llama-server \
+        /usr/local/lib/ollama/llama-server \
+        /usr/local/bin/llama-server \
+        /usr/bin/llama-server
+    do
+        if [ -x "$candidate" ]; then
+            LLAMA_SERVER="$candidate"
+            break
+        fi
+    done
+
+    if [ -z "$LLAMA_SERVER" ]; then
+        echo -e "${RED}[ERROR] No se encontró llama-server.${NC}"
+        echo
+        echo "Ollama está instalado pero falta su runtime de ejecución."
+        return 1
+    fi
+
+    echo -e "${GREEN}[OK] llama-server encontrado:${NC}"
+    echo "$LLAMA_SERVER"
+
+    # --------------------------------------------------------------------------
+    # Ollama 0.33.x busca llama-server en /usr/local/lib/ollama
+    # --------------------------------------------------------------------------
+
+    OLLAMA_RUNTIME="/usr/local/lib/ollama"
+
+    sudo mkdir -p "$OLLAMA_RUNTIME" || return 1
+
+    echo
+    echo -e "${CYAN}[INFO] Preparando runtime de Ollama...${NC}"
+
+    sudo ln -sf "$LLAMA_SERVER" \
+        "$OLLAMA_RUNTIME/llama-server" || return 1
+
+    LLAMA_DIR="$(dirname "$LLAMA_SERVER")"
+
+    for lib in \
+        libllama-server-impl.so \
+        libllama-common.so.0 \
+        libmtmd.so.0 \
+        libllama.so.0 \
+        libggml.so.0 \
+        libggml-base.so.0
+    do
+
+        if [ -e "$LLAMA_DIR/$lib" ]; then
+            sudo ln -sf "$LLAMA_DIR/$lib" \
+                "$OLLAMA_RUNTIME/$lib" || return 1
+        fi
+
+    done
+
+    echo -e "${GREEN}[OK] Runtime de Ollama preparado.${NC}"
+
+    # --------------------------------------------------------------------------
     # Comprobar si Ollama ya está funcionando
     # --------------------------------------------------------------------------
 
-    if curl -fsS http://127.0.0.1:11434/api/tags \
+    if curl -fsS \
+        http://127.0.0.1:11434/api/tags \
         >/dev/null 2>&1; then
 
         echo -e "${GREEN}[OK] Servidor Ollama ya está funcionando.${NC}"
@@ -1190,23 +1257,20 @@ install_ollama_system()
         echo
         echo -e "${CYAN}[INFO] Iniciando servidor Ollama...${NC}"
 
-        # ----------------------------------------------------------------------
-        # Si existe servicio systemd, utilizarlo
-        # ----------------------------------------------------------------------
-
-        if systemctl list-unit-files 2>/dev/null | grep -q '^ollama\.service'; then
+        if systemctl list-unit-files 2>/dev/null | \
+            grep -q '^ollama\.service'; then
 
             echo -e "${CYAN}[INFO] Utilizando servicio systemd.${NC}"
 
-            sudo systemctl enable ollama.service >/dev/null 2>&1 || true
-            sudo systemctl restart ollama.service >/dev/null 2>&1 || \
-                sudo systemctl start ollama.service >/dev/null 2>&1 || true
+            sudo systemctl enable ollama.service \
+                >/dev/null 2>&1 || true
+
+            sudo systemctl restart ollama.service \
+                >/dev/null 2>&1 || \
+            sudo systemctl start ollama.service \
+                >/dev/null 2>&1 || true
 
         else
-
-            # ------------------------------------------------------------------
-            # No existe servicio systemd: iniciar manualmente
-            # ------------------------------------------------------------------
 
             echo -e "${CYAN}[INFO] No existe ollama.service.${NC}"
             echo -e "${CYAN}[INFO] Iniciando ollama serve...${NC}"
@@ -1232,7 +1296,7 @@ install_ollama_system()
     fi
 
     # --------------------------------------------------------------------------
-    # Esperar a que el servidor esté disponible
+    # Esperar al servidor
     # --------------------------------------------------------------------------
 
     echo
@@ -1265,13 +1329,18 @@ install_ollama_system()
         echo
         echo "Registro de Ollama:"
         echo
-        tail -30 /tmp/mmm-tu-asistente-ollama.log 2>/dev/null || true
+        tail -30 /tmp/mmm-tu-asistente-ollama.log \
+            2>/dev/null || true
         echo
 
         return 1
     fi
 
     echo -e "${GREEN}[OK] Servidor Ollama activo.${NC}"
+
+    # --------------------------------------------------------------------------
+    # Comprobar versión
+    # --------------------------------------------------------------------------
 
     OLLAMA_VERSION="$(ollama --version 2>/dev/null || true)"
 
@@ -1280,7 +1349,6 @@ install_ollama_system()
     fi
 
     echo
-
     return 0
 }
 install_ollama_node()
