@@ -1239,26 +1239,36 @@ install_python_environment()
         return 0
     fi
 
-    if [ ! -d "$BASE_DIR/venv" ]; then
+    VENV_DIR="$BASE_DIR/venv"
 
-        python3 -m venv "$BASE_DIR/venv" ||
-            abort_install
-
+    if [ ! -d "$VENV_DIR" ]; then
+        echo "[INFO] Creando entorno virtual Python..."
+        python3 -m venv "$VENV_DIR" || abort_install
     fi
 
-    source "$BASE_DIR/venv/bin/activate"
+    if [ ! -x "$VENV_DIR/bin/python" ]; then
+        echo -e "${YELLOW}[AVISO] El entorno Python está incompleto.${NC}"
+        echo "[INFO] Recreando venv..."
+        rm -rf "$VENV_DIR"
+        python3 -m venv "$VENV_DIR" || abort_install
+    fi
 
-    python -m pip install \
-        --upgrade \
-        pip \
-        setuptools \
-        wheel \
-        -q ||
+    if ! "$VENV_DIR/bin/python" -m pip --version >/dev/null 2>&1; then
+        echo "[INFO] pip no está disponible. Intentando reparar..."
+        "$VENV_DIR/bin/python" -m ensurepip --upgrade >/dev/null 2>&1 || {
+            echo "[INFO] Recreando el entorno virtual..."
+            rm -rf "$VENV_DIR"
+            python3 -m venv "$VENV_DIR" || abort_install
+        }
+    fi
+
+    source "$VENV_DIR/bin/activate"
+
+    python -m pip install --upgrade pip setuptools wheel -q ||
         abort_install
 
     echo -e "${GREEN}[OK] Entorno Python preparado.${NC}"
 }
-
 # ==============================================================================
 # PYTHON
 # ==============================================================================
