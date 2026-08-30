@@ -236,6 +236,8 @@ abort_install()
 # PROGRESO
 # ==============================================================================
 
+PROGRESS_PID=""
+
 progress_start()
 {
     if [ "$USE_GUI" = true ]; then
@@ -243,13 +245,14 @@ progress_start()
         (
             echo "0"
             echo "# Preparando instalación..."
-            sleep 1
+            while true; do
+                sleep 3600
+            done
         ) |
         zenity --progress \
             --title="$TITLE" \
-            --text="Preparando..." \
+            --text="Preparando instalación..." \
             --percentage=0 \
-            --auto-close \
             --auto-kill \
             --width=650 \
             2>/dev/null &
@@ -267,7 +270,10 @@ progress_update()
     if [ "$USE_GUI" = true ]; then
 
         if kill -0 "${PROGRESS_PID:-0}" 2>/dev/null; then
-            echo "$percent" > "/proc/$PROGRESS_PID/fd/0" 2>/dev/null || true
+            {
+                echo "$percent"
+                echo "# $text"
+            } > "/proc/$PROGRESS_PID/fd/0" 2>/dev/null || true
         fi
 
     else
@@ -282,6 +288,7 @@ progress_close()
 {
     if [ "$USE_GUI" = true ]; then
         kill "${PROGRESS_PID:-0}" 2>/dev/null || true
+        PROGRESS_PID=""
     fi
 }
 
@@ -2032,28 +2039,35 @@ fi
 
 progress_start
 
+progress_update 11 "Fase 1/9 — Instalando dependencias del sistema..."
 install_system_dependencies
 
+progress_update 22 "Fase 2/9 — Comprobando Node.js y npm..."
 install_node
 
+progress_update 33 "Fase 3/9 — Instalando dependencias Node..."
 install_node_dependencies
 
+progress_update 44 "Fase 4/9 — Preparando Python..."
 install_python_environment
 
+progress_update 55 "Fase 5/9 — Instalando librerías Python..."
 install_python_dependencies
 
+progress_update 66 "Fase 6/9 — Configurando activación..."
 install_openwakeword
 
+progress_update 77 "Fase 7/9 — Preparando Piper TTS..."
 install_piper
 
+progress_update 88 "Fase 8/9 — Preparando Spotify Connect..."
 install_spotify
 
 # ==============================================================================
 # CONFIGURACIONES
 # ===============================================================================
 
-echo
-echo -e "${BLUE}[9/9] Configurando TuAsistente...${NC}"
+progress_update 100 "Fase 9/9 — Configurando TuAsistente..."
 
 configure_listen_key
 
