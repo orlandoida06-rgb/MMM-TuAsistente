@@ -70,6 +70,7 @@ MIC_DEVICE="null"
 MIC_NAME="Sistema"
 
 OUTPUT_DEVICE="default"
+OLLAMA_MODEL="qwen2.5:1.5b"
 OUTPUT_NAME="Sistema"
 
 SPOTIFY_ENABLED="false"
@@ -287,10 +288,15 @@ if [ "$USE_GUI" = true ]; then
         "Bienvenido al instalador de MMM-TuAsistente.
 
 Vamos a configurar:
+• Idioma
 • Activación
-• Audio
+• Teclado y tecla PTT (si corresponde)
+• Audio de entrada y salida
 • Voz Piper
 • Spotify
+• Ollama
+• Modelo de IA
+• Descarga del modelo de IA
 • MagicMirror
 
 ¿Quieres continuar?"
@@ -306,14 +312,19 @@ else
         "Bienvenido al instalador de MMM-TuAsistente.
 
 Vamos a configurar:
+- Idioma
 - Activación
-- Audio
+- Teclado y tecla PTT (si corresponde)
+- Audio de entrada y salida
 - Voz Piper
 - Spotify
+- Ollama
+- Modelo de IA
+- Descarga del modelo de IA
 - MagicMirror
 
 ¿Quieres continuar?" \
-        15 70
+        20 75
     then
         exit 0
     fi
@@ -713,9 +724,9 @@ select_audio_devices()
     OUTPUT_DEVICE="default"
     OUTPUT_NAME="Sistema"
 
-    # --------------------------------------------------------------------------
-    # MICRÓFONOS
-    # --------------------------------------------------------------------------
+    # ======================================================================
+    # MICRÓFONO
+    # ======================================================================
 
     mapfile -t CAPTURE_LINES < <(
         arecord -l 2>/dev/null |
@@ -750,30 +761,36 @@ select_audio_devices()
 
         if [ "$USE_GUI" = true ]; then
 
-            MIC_CHOICE=$(zenity --list \
-                --title="$TITLE" \
-                --text="Selecciona la entrada de audio:" \
-                --radiolist \
-                --column="" \
-                --column="ID" \
-                --column="Micrófono" \
-                TRUE "${MENU_ARGS[0]}" "${MENU_ARGS[1]}" \
-                $(for ((i=2;i<${#MENU_ARGS[@]};i+=2)); do
-                    printf 'FALSE "%s" "%s" ' "${MENU_ARGS[$i]}" "${MENU_ARGS[$((i+1))]}"
-                  done) \
-                --width=850 \
-                --height=450 \
-                2>/dev/null)
+            MIC_CHOICE=$(
+                zenity --list \
+                    --title="$TITLE" \
+                    --text="Selecciona la entrada de audio:" \
+                    --radiolist \
+                    --column="" \
+                    --column="ID" \
+                    --column="Micrófono" \
+                    TRUE "${MENU_ARGS[0]}" "${MENU_ARGS[1]}" \
+                    $(for ((i=2;i<${#MENU_ARGS[@]};i+=2)); do
+                        printf 'FALSE "%s" "%s" ' \
+                            "${MENU_ARGS[$i]}" \
+                            "${MENU_ARGS[$((i+1))]}"
+                    done) \
+                    --width=850 \
+                    --height=450 \
+                    2>/dev/null
+            )
 
         else
 
-            MIC_CHOICE=$(whiptail \
-                --title="$TITLE" \
-                --menu \
-                "Selecciona entrada de audio:" \
-                20 90 8 \
-                "${MENU_ARGS[@]}" \
-                3>&1 1>&2 2>&3)
+            MIC_CHOICE=$(
+                whiptail \
+                    --title="$TITLE" \
+                    --menu \
+                    "Selecciona entrada de audio:" \
+                    20 90 8 \
+                    "${MENU_ARGS[@]}" \
+                    3>&1 1>&2 2>&3
+            )
 
         fi
 
@@ -784,27 +801,29 @@ select_audio_devices()
 
         MIC_NAME="ALSA hw:${MIC_CARD},${MIC_DEVICE}"
 
+        # ==================================================================
+        # BUSCAR ÍNDICE REAL DE SOUNDDEVICE
+        # ==================================================================
+
         if [ -x "$BASE_DIR/venv/bin/python" ]; then
 
             MIC_INDEX="$(
                 "$BASE_DIR/venv/bin/python" - \
                     "$MIC_CARD" \
-                    "$MIC_DEVICE" <<'PY'
+                    "$MIC_DEVICE" <<'PYTHON'
 import sys
+import sounddevice as sd
 
 card = sys.argv[1]
-dev = sys.argv[2]
+device = sys.argv[2]
+
+target_hw = f"hw:{card},{device}"
+target_plughw = f"plughw:{card},{device}"
 
 try:
-    import sounddevice as sd
-
     devices = sd.query_devices()
 
-    wanted = [
-        f"hw:{card},{dev}",
-        f"plughw:{card},{dev}",
-    ]
-
+    # 1. Coincidencia exacta.
     for index, info in enumerate(devices):
 
         name = str(info.get("name", ""))
@@ -812,10 +831,13 @@ try:
         if int(info.get("max_input_channels", 0)) <= 0:
             continue
 
-        if any(x in name for x in wanted):
+        if target_hw in name or target_plughw in name:
             print(index)
             sys.exit(0)
 
+    # 2. Coincidencia por "card,device".
+    target_pair = f"({target_hw})"
+
     for index, info in enumerate(devices):
 
         name = str(info.get("name", ""))
@@ -823,7 +845,23 @@ try:
         if int(info.get("max_input_channels", 0)) <= 0:
             continue
 
-        if f"{card},{dev}" in name:
+        if target_pair in name:
+            print(index)
+            sys.exit(0)
+
+    # 3. Último intento: dispositivo USB.
+    for index, info in enumerate(devices):
+
+        name = str(info.get("name", "")).lower()
+
+        if int(info.get("max_input_channels", 0)) <= 0:
+            continue
+
+        if (
+            "usb camera" in name
+            or "usb audio" in name
+            or "omnivision" in name
+        ):
             print(index)
             sys.exit(0)
 
@@ -831,26 +869,39 @@ try:
 
 except Exception:
     print("null")
-PY
+PYTHON
             )"
 
-            [ -n "$MIC_INDEX" ] || MIC_INDEX="null"
+            if [[ "$MIC_INDEX" =~ ^[0-9]+$ ]]; then
+
+                echo -e "${GREEN}[OK] ÍNDICE ENCONTRADO: $MIC_INDEX${NC}"
+
+            else
+
+                echo -e "${YELLOW}[AVISO] No se pudo obtener el índice SoundDevice.${NC}"
+
+                MIC_INDEX="null"
+
+            fi
 
         fi
 
     else
 
         if [ "$USE_GUI" = true ]; then
-            gui_info "No se han detectado micrófonos ALSA.
+
+            gui_info \
+                "No se han detectado micrófonos ALSA.
 
 Se utilizará el dispositivo de audio predeterminado."
+
         fi
 
     fi
 
-    # --------------------------------------------------------------------------
-    # SALIDAS
-    # --------------------------------------------------------------------------
+    # ======================================================================
+    # SALIDA DE AUDIO
+    # ======================================================================
 
     mapfile -t PLAYBACK_LINES < <(
         aplay -l 2>/dev/null |
@@ -885,30 +936,36 @@ Se utilizará el dispositivo de audio predeterminado."
 
         if [ "$USE_GUI" = true ]; then
 
-            OUTPUT_CHOICE=$(zenity --list \
-                --title="$TITLE" \
-                --text="Selecciona la salida de audio:" \
-                --radiolist \
-                --column="" \
-                --column="ID" \
-                --column="Salida" \
-                TRUE "${MENU_ARGS[0]}" "${MENU_ARGS[1]}" \
-                $(for ((i=2;i<${#MENU_ARGS[@]};i+=2)); do
-                    printf 'FALSE "%s" "%s" ' "${MENU_ARGS[$i]}" "${MENU_ARGS[$((i+1))]}"
-                  done) \
-                --width=850 \
-                --height=450 \
-                2>/dev/null)
+            OUTPUT_CHOICE=$(
+                zenity --list \
+                    --title="$TITLE" \
+                    --text="Selecciona la salida de audio:" \
+                    --radiolist \
+                    --column="" \
+                    --column="ID" \
+                    --column="Salida" \
+                    TRUE "${MENU_ARGS[0]}" "${MENU_ARGS[1]}" \
+                    $(for ((i=2;i<${#MENU_ARGS[@]};i+=2)); do
+                        printf 'FALSE "%s" "%s" ' \
+                            "${MENU_ARGS[$i]}" \
+                            "${MENU_ARGS[$((i+1))]}"
+                    done) \
+                    --width=850 \
+                    --height=450 \
+                    2>/dev/null
+            )
 
         else
 
-            OUTPUT_CHOICE=$(whiptail \
-                --title="$TITLE" \
-                --menu \
-                "Selecciona salida de audio:" \
-                20 90 8 \
-                "${MENU_ARGS[@]}" \
-                3>&1 1>&2 2>&3)
+            OUTPUT_CHOICE=$(
+                whiptail \
+                    --title="$TITLE" \
+                    --menu \
+                    "Selecciona salida de audio:" \
+                    20 90 8 \
+                    "${MENU_ARGS[@]}" \
+                    3>&1 1>&2 2>&3
+            )
 
         fi
 
@@ -920,12 +977,603 @@ Se utilizará el dispositivo de audio predeterminado."
         OUTPUT_DEVICE="plughw:${OUTPUT_CARD},${OUTPUT_DEVICE_NUM}"
         OUTPUT_NAME="ALSA hw:${OUTPUT_CARD},${OUTPUT_DEVICE_NUM}"
 
+    else
+
+        if [ "$USE_GUI" = true ]; then
+
+            gui_info \
+                "No se han detectado salidas ALSA.
+
+Se utilizará la salida de audio predeterminada."
+
+        fi
+
     fi
+
+    echo
+    echo "===== AUDIO SELECCIONADO ====="
+    echo "Micrófono: $MIC_NAME"
+    echo "MIC_INDEX: $MIC_INDEX"
+    echo "ALSA: hw:${MIC_CARD},${MIC_DEVICE}"
+    echo "Salida: $OUTPUT_NAME"
+    echo "OUTPUT_DEVICE: $OUTPUT_DEVICE"
+    echo
 }
 
 # ==============================================================================
-# SPOTIFY
+# INSTALAR DEPENDENCIA NODE OLLAMA
 # ==============================================================================
+
+# ==============================================================================
+# SELECCIONAR MODELO OLLAMA
+# ==============================================================================
+
+select_ollama_model()
+{
+    OLLAMA_MODEL="qwen2.5:1.5b"
+
+    echo
+    echo -e "${CYAN}===== MODELO DE IA =====${NC}"
+    echo
+
+    # ======================================================================
+    # MODO SIMULACIÓN
+    # ======================================================================
+
+    if [ "$SIMULATION" = true ]; then
+        echo "Modelo de prueba: $OLLAMA_MODEL"
+        return 0
+    fi
+
+    # ======================================================================
+    # MODO GRÁFICO
+    # ======================================================================
+
+    if [ "$USE_GUI" = true ] && command -v zenity >/dev/null 2>&1; then
+
+        MODEL_CHOICE="$(
+            zenity --list \
+                --title="MMM-TuAsistente — Modelo de IA" \
+                --text="Selecciona el modelo de Ollama que quieres utilizar:" \
+                --radiolist \
+                --width=700 \
+                --height=420 \
+                --column="Seleccionar" \
+                --column="Modelo" \
+                --column="Descripción" \
+                TRUE  "qwen2.5:1.5b" "Ligero — recomendado para equipos con pocos recursos" \
+                FALSE "gemma3:1b"     "Muy ligero — respuestas rápidas" \
+                FALSE "gemma3:4b"     "Más capaz — necesita más recursos" \
+                FALSE "Otro modelo"   "Introducir el nombre exacto del modelo" \
+                2>/dev/null
+        )"
+
+        if [ $? -ne 0 ]; then
+            echo -e "${YELLOW}[AVISO] Selección cancelada. Se usará qwen2.5:1.5b.${NC}"
+            OLLAMA_MODEL="qwen2.5:1.5b"
+            return 0
+        fi
+
+        case "$MODEL_CHOICE" in
+
+            qwen2.5:1.5b)
+                OLLAMA_MODEL="qwen2.5:1.5b"
+                ;;
+
+            gemma3:1b)
+                OLLAMA_MODEL="gemma3:1b"
+                ;;
+
+            gemma3:4b)
+                OLLAMA_MODEL="gemma3:4b"
+                ;;
+
+            "Otro modelo")
+                OLLAMA_MODEL="$(
+                    zenity --entry \
+                        --title="MMM-TuAsistente — Modelo personalizado" \
+                        --text="Introduce el nombre exacto del modelo de Ollama:" \
+                        --entry-text="qwen2.5:1.5b" \
+                        --width=600 \
+                        2>/dev/null
+                )"
+
+                [ -n "$OLLAMA_MODEL" ] || OLLAMA_MODEL="qwen2.5:1.5b"
+                ;;
+
+            *)
+                OLLAMA_MODEL="qwen2.5:1.5b"
+                ;;
+
+        esac
+
+    # ======================================================================
+    # MODO TEXTO
+    # ======================================================================
+
+    else
+
+        echo "1) qwen2.5:1.5b — Ligero"
+        echo "2) gemma3:1b    — Muy ligero"
+        echo "3) gemma3:4b    — Más capaz"
+        echo "4) Otro modelo"
+        echo
+
+        read -rp "Elige [1-4]: " MODEL_CHOICE
+
+        case "$MODEL_CHOICE" in
+
+            1)
+                OLLAMA_MODEL="qwen2.5:1.5b"
+                ;;
+
+            2)
+                OLLAMA_MODEL="gemma3:1b"
+                ;;
+
+            3)
+                OLLAMA_MODEL="gemma3:4b"
+                ;;
+
+            4)
+                read -rp "Nombre exacto del modelo: " OLLAMA_MODEL
+                [ -n "$OLLAMA_MODEL" ] || OLLAMA_MODEL="qwen2.5:1.5b"
+                ;;
+
+            *)
+                echo -e "${YELLOW}[AVISO] Opción no válida. Se usará qwen2.5:1.5b.${NC}"
+                OLLAMA_MODEL="qwen2.5:1.5b"
+                ;;
+
+        esac
+
+    fi
+
+    echo
+    echo -e "${GREEN}[OK] Modelo seleccionado: $OLLAMA_MODEL${NC}"
+    echo
+}
+
+install_ollama_system()
+{
+    echo
+    echo -e "${CYAN}===== OLLAMA =====${NC}"
+    echo
+
+    if [ "$SIMULATION" = true ]; then
+        echo -e "${YELLOW}[SIMULACIÓN] Se instalaría Ollama.${NC}"
+        echo -e "${YELLOW}[SIMULACIÓN] Se iniciaría el servidor Ollama.${NC}"
+        return 0
+    fi
+
+    # --------------------------------------------------------------------------
+    # Instalar Ollama si no existe
+    # --------------------------------------------------------------------------
+
+    if ! command -v ollama >/dev/null 2>&1; then
+
+        echo -e "${CYAN}[INFO] Ollama no está instalado.${NC}"
+        echo -e "${CYAN}[INFO] Instalando Ollama...${NC}"
+        echo
+
+        if curl -fsSL https://ollama.com/install.sh | sh; then
+            echo -e "${GREEN}[OK] Ollama instalado correctamente.${NC}"
+        else
+            echo -e "${RED}[ERROR] No se pudo instalar Ollama.${NC}"
+            return 1
+        fi
+
+    else
+
+        echo -e "${GREEN}[OK] Ollama ya está instalado.${NC}"
+
+    fi
+
+    export PATH="/usr/local/bin:$PATH"
+
+    if ! command -v ollama >/dev/null 2>&1; then
+        echo -e "${RED}[ERROR] El comando ollama no está disponible.${NC}"
+        return 1
+    fi
+
+    # --------------------------------------------------------------------------
+    # Comprobar si Ollama ya está funcionando
+    # --------------------------------------------------------------------------
+
+    if curl -fsS http://127.0.0.1:11434/api/tags \
+        >/dev/null 2>&1; then
+
+        echo -e "${GREEN}[OK] Servidor Ollama ya está funcionando.${NC}"
+
+    else
+
+        echo
+        echo -e "${CYAN}[INFO] Iniciando servidor Ollama...${NC}"
+
+        # ----------------------------------------------------------------------
+        # Si existe servicio systemd, utilizarlo
+        # ----------------------------------------------------------------------
+
+        if systemctl list-unit-files 2>/dev/null | grep -q '^ollama\.service'; then
+
+            echo -e "${CYAN}[INFO] Utilizando servicio systemd.${NC}"
+
+            sudo systemctl enable ollama.service >/dev/null 2>&1 || true
+            sudo systemctl restart ollama.service >/dev/null 2>&1 || \
+                sudo systemctl start ollama.service >/dev/null 2>&1 || true
+
+        else
+
+            # ------------------------------------------------------------------
+            # No existe servicio systemd: iniciar manualmente
+            # ------------------------------------------------------------------
+
+            echo -e "${CYAN}[INFO] No existe ollama.service.${NC}"
+            echo -e "${CYAN}[INFO] Iniciando ollama serve...${NC}"
+
+            if ! pgrep -x ollama >/dev/null 2>&1; then
+
+                nohup ollama serve \
+                    >/tmp/mmm-tu-asistente-ollama.log \
+                    2>&1 &
+
+                OLLAMA_PID=$!
+
+                echo -e "${GREEN}[OK] Ollama iniciado. PID: $OLLAMA_PID${NC}"
+
+            else
+
+                echo -e "${GREEN}[OK] Ollama ya estaba ejecutándose.${NC}"
+
+            fi
+
+        fi
+
+    fi
+
+    # --------------------------------------------------------------------------
+    # Esperar a que el servidor esté disponible
+    # --------------------------------------------------------------------------
+
+    echo
+    echo -e "${CYAN}[INFO] Esperando a que Ollama esté disponible...${NC}"
+
+    OLLAMA_READY=false
+
+    for i in $(seq 1 30); do
+
+        if curl -fsS \
+            http://127.0.0.1:11434/api/tags \
+            >/dev/null 2>&1; then
+
+            OLLAMA_READY=true
+            break
+
+        fi
+
+        printf "."
+        sleep 1
+
+    done
+
+    echo
+
+    if [ "$OLLAMA_READY" != true ]; then
+
+        echo
+        echo -e "${RED}[ERROR] Ollama no responde en el puerto 11434.${NC}"
+        echo
+        echo "Registro de Ollama:"
+        echo
+        tail -30 /tmp/mmm-tu-asistente-ollama.log 2>/dev/null || true
+        echo
+
+        return 1
+    fi
+
+    echo -e "${GREEN}[OK] Servidor Ollama activo.${NC}"
+
+    OLLAMA_VERSION="$(ollama --version 2>/dev/null || true)"
+
+    if [ -n "$OLLAMA_VERSION" ]; then
+        echo -e "${GREEN}[OK] $OLLAMA_VERSION${NC}"
+    fi
+
+    echo
+
+    return 0
+}
+install_ollama_node()
+{
+    # ======================================================================
+    # SIMULACIÓN
+    # ======================================================================
+
+    if [ "$SIMULATION" = true ]; then
+
+        if [ "$USE_GUI" = true ] && command -v zenity >/dev/null 2>&1; then
+            zenity --info \
+                --title="MMM-TuAsistente" \
+                --text="Se instalaría la dependencia Node.js:
+
+ollama" \
+                --width=500 \
+                2>/dev/null || true
+        fi
+
+        return 0
+    fi
+
+    # ======================================================================
+    # COMPROBAR NODE / NPM
+    # ======================================================================
+
+    if ! command -v node >/dev/null 2>&1; then
+
+        if [ "$USE_GUI" = true ]; then
+            zenity --error \
+                --title="MMM-TuAsistente" \
+                --text="No se encontró Node.js." \
+                --width=500 \
+                2>/dev/null || true
+        fi
+
+        return 1
+    fi
+
+    if ! command -v npm >/dev/null 2>&1; then
+
+        if [ "$USE_GUI" = true ]; then
+            zenity --error \
+                --title="MMM-TuAsistente" \
+                --text="No se encontró npm." \
+                --width=500 \
+                2>/dev/null || true
+        fi
+
+        return 1
+    fi
+
+    cd "$BASE_DIR" || return 1
+
+    # ======================================================================
+    # YA INSTALADO
+    # ======================================================================
+
+    if npm list ollama --depth=0 >/dev/null 2>&1; then
+
+        if [ "$USE_GUI" = true ]; then
+            zenity --info \
+                --title="MMM-TuAsistente" \
+                --text="La dependencia <b>ollama</b> ya está instalada." \
+                --width=500 \
+                2>/dev/null || true
+        fi
+
+        return 0
+    fi
+
+    # ======================================================================
+    # INSTALACIÓN GRÁFICA
+    # ======================================================================
+
+    if [ "$USE_GUI" = true ] && command -v zenity >/dev/null 2>&1; then
+
+        if npm install ollama 2>&1 | \
+            zenity --progress \
+                --title="MMM-TuAsistente" \
+                --text="Instalando la dependencia Node.js de Ollama..." \
+                --pulsate \
+                --no-cancel \
+                --auto-close \
+                --width=600 \
+                2>/dev/null
+        then
+
+            if npm list ollama --depth=0 >/dev/null 2>&1; then
+
+                zenity --info \
+                    --title="MMM-TuAsistente" \
+                    --text="✓ <b>Ollama Node.js instalado correctamente.</b>" \
+                    --width=550 \
+                    2>/dev/null || true
+
+                return 0
+            fi
+        fi
+
+        zenity --error \
+            --title="MMM-TuAsistente" \
+            --text="No se pudo instalar la dependencia Node.js:
+
+<b>ollama</b>" \
+            --width=550 \
+            2>/dev/null || true
+
+        return 1
+
+    fi
+
+    # ======================================================================
+    # MODO TEXTO
+    # ======================================================================
+
+    echo
+    echo "===== OLLAMA NODE.JS ====="
+    echo "Instalando dependencia npm: ollama..."
+
+    if npm install ollama; then
+
+        if npm list ollama --depth=0 >/dev/null 2>&1; then
+            echo "[OK] ollama instalado correctamente."
+            return 0
+        fi
+
+    fi
+
+    echo "[ERROR] No se pudo instalar la dependencia ollama."
+    return 1
+}
+
+
+download_ollama_model()
+{
+    if [ "$SIMULATION" = true ]; then
+        echo -e "${YELLOW}[SIMULACIÓN] Se preguntaría si descargar: $OLLAMA_MODEL${NC}"
+        return 0
+    fi
+
+    DOWNLOAD_MODEL=false
+
+    if [ "$USE_GUI" = true ]; then
+
+        if whiptail \
+            --title="⬇️ MODELO OLLAMA" \
+            --yesno \
+            "¿Quieres descargar ahora el modelo?\n\nModelo:\n$OLLAMA_MODEL\n\nLa descarga puede ocupar bastante espacio en disco." \
+            13 70
+        then
+            DOWNLOAD_MODEL=true
+        fi
+
+    else
+
+        echo
+        echo "¿Quieres descargar ahora el modelo?"
+        echo
+        echo "Modelo: $OLLAMA_MODEL"
+        echo
+
+        read -rp "¿Descargar ahora? [S/n]: " ANSWER
+
+        case "$ANSWER" in
+            n|N|no|NO|No)
+                DOWNLOAD_MODEL=false
+                ;;
+            *)
+                DOWNLOAD_MODEL=true
+                ;;
+        esac
+
+    fi
+
+    if [ "$DOWNLOAD_MODEL" != true ]; then
+
+        if [ "$USE_GUI" = true ]; then
+
+            whiptail \
+                --title="MODELO OLLAMA" \
+                --msgbox \
+                "Se ha omitido la descarga.\n\nPuedes descargarlo posteriormente con:\n\nollama pull $OLLAMA_MODEL" \
+                11 75
+
+        else
+
+            echo
+            echo "[INFO] Se omite la descarga."
+            echo
+            echo "Puedes descargarlo posteriormente con:"
+            echo
+            echo "ollama pull $OLLAMA_MODEL"
+            echo
+
+        fi
+
+        return 0
+    fi
+
+    if ! command -v ollama >/dev/null 2>&1; then
+
+        if [ "$USE_GUI" = true ]; then
+            whiptail \
+                --title="❌ OLLAMA" \
+                --msgbox \
+                "No se encontró el comando ollama.\n\nInstala Ollama antes de descargar el modelo." \
+                10 70
+        else
+            echo -e "${RED}[ERROR] No se encontró el comando ollama.${NC}"
+        fi
+
+        return 1
+    fi
+
+    if [ "$USE_GUI" = true ]; then
+
+        (
+            echo "1"
+            echo "XXX"
+            echo "Descargando $OLLAMA_MODEL..."
+            echo "XXX"
+
+            ollama pull "$OLLAMA_MODEL" >/tmp/mmm-tuasistente-ollama-pull.log 2>&1
+            RESULT=$?
+
+            echo "100"
+            echo "XXX"
+
+            if [ "$RESULT" -eq 0 ]; then
+                echo "Modelo descargado correctamente."
+            else
+                echo "Error descargando el modelo."
+            fi
+
+            echo "XXX"
+
+            exit "$RESULT"
+
+        ) | whiptail \
+            --title="⬇️ DESCARGANDO OLLAMA" \
+            --gauge \
+            "Descargando $OLLAMA_MODEL..." \
+            10 75 0
+
+        RESULT=${PIPESTATUS[0]}
+
+    else
+
+        echo
+        echo "===== DESCARGANDO MODELO OLLAMA ====="
+        echo
+        ollama pull "$OLLAMA_MODEL"
+        RESULT=$?
+
+    fi
+
+    if [ "$RESULT" -ne 0 ]; then
+
+        if [ "$USE_GUI" = true ]; then
+
+            whiptail \
+                --title="❌ ERROR" \
+                --msgbox \
+                "No se pudo descargar:\n\n$OLLAMA_MODEL\n\nPuedes revisar el registro:\n/tmp/mmm-tuasistente-ollama-pull.log" \
+                11 75
+
+        else
+
+            echo -e "${RED}[ERROR] No se pudo descargar $OLLAMA_MODEL.${NC}"
+
+        fi
+
+        return 1
+    fi
+
+    if [ "$USE_GUI" = true ]; then
+
+        whiptail \
+            --title="✅ MODELO LISTO" \
+            --msgbox \
+            "El modelo $OLLAMA_MODEL se ha descargado correctamente.\n\nTuAsistente ya puede utilizarlo." \
+            10 70
+
+    else
+
+        echo -e "${GREEN}[OK] Modelo $OLLAMA_MODEL descargado correctamente.${NC}"
+
+    fi
+
+    return 0
+}
 
 configure_spotify()
 {
@@ -985,7 +1633,7 @@ El dispositivo aparecerá en Spotify como:
     MMM-TuAsistente
 
 ¿Quieres activar Spotify?" \
-            15 70
+            20 75
         then
 
             SPOTIFY_ENABLED="true"
@@ -1553,7 +2201,7 @@ configure_listen_key()
     "$BASE_DIR/venv/bin/python" - \
         "$BASE_DIR/listen_key.py" \
         "$KEYBOARD_PATH" \
-        "$PTT_KEY" <<'PY'
+        "$PTT_KEY" <<'PYTHON'
 
 import sys
 import re
@@ -1565,59 +2213,50 @@ key = sys.argv[3]
 with open(path, "r", encoding="utf-8") as f:
     content = f.read()
 
-replacement = f'''
-def find_keyboard():
-    configured = {keyboard!r}
+# ============================================================
+# CONFIGURAR TECLADO
+# ============================================================
 
-    if configured != "null":
-        import os
-        if os.path.exists(configured):
-            return configured
-
-    try:
-        for device_path in evdev.list_devices():
-            try:
-                dev = evdev.InputDevice(device_path)
-                if "keyboard" in dev.name.lower():
-                    return dev.path
-            except Exception:
-                continue
-    except Exception:
-        pass
-
-    return None
-
-'''
-
-pattern = r"def find_keyboard\(\):.*?(?=\n(?:def |if __name__|KEYBOARD_PATH))"
-
-new_content, count = re.sub(
-    pattern,
-    replacement,
-    content,
-    count=1,
-    flags=re.S
+replacement = (
+    'configured = ' + repr(keyboard)
 )
 
-if count:
-    content = new_content
-
-content = re.sub(
-    r"ecodes\.KEY_[A-Z0-9_]+",
-    f"ecodes.{key}",
+content, count = re.subn(
+    r'configured\s*=\s*os\.environ\.get\(\s*"MMM_TUASISTENTE_KEYBOARD"\s*,\s*"null"\s*\)',
+    replacement,
     content,
     count=1
 )
 
+if count == 1:
+    print(f"[OK] Teclado configurado: {keyboard}")
+else:
+    print("[AVISO] No se encontró la configuración del teclado.")
+
+# ============================================================
+# CONFIGURAR TECLA PTT
+# ============================================================
+
+content, count = re.subn(
+    r'ecodes\.KEY_[A-Z0-9_]+',
+    f'ecodes.{key}',
+    content,
+    count=1
+)
+
+if count == 1:
+    print(f"[OK] Tecla PTT configurada: {key}")
+else:
+    print("[AVISO] No se encontró la tecla PTT.")
+
 with open(path, "w", encoding="utf-8") as f:
     f.write(content)
 
-PY
+PYTHON
 }
 
 # ==============================================================================
-# CONFIGURAR TRANSCRIBE
-# ==============================================================================
+
 
 configure_transcribe()
 {
@@ -1637,42 +2276,70 @@ configure_transcribe()
         "$BASE_DIR/transcribe.py" \
         "$MIC_INDEX" \
         "$MIC_CARD" \
-        "$MIC_DEVICE" <<'PY'
+        "$MIC_DEVICE" <<'PYTHON'
 
 import sys
 import re
 
 path = sys.argv[1]
-device = sys.argv[2]
-card = sys.argv[3]
-dev = sys.argv[4]
+mic_index = sys.argv[2]
+mic_card = sys.argv[3]
+mic_device = sys.argv[4]
 
 with open(path, "r", encoding="utf-8") as f:
     content = f.read()
 
-if device == "null":
-    replacement = "DEVICE_INDEX = None"
+# ------------------------------------------------------------
+# DEVICE_INDEX
+# ------------------------------------------------------------
+
+if mic_index == "null":
+    device_index = "None"
 else:
-    replacement = f"DEVICE_INDEX = {device}"
+    device_index = mic_index
 
 content = re.sub(
-    r"DEVICE_INDEX\s*=\s*.*",
-    replacement,
+    r"^\s*DEVICE_INDEX\s*=.*$",
+    f"DEVICE_INDEX = {device_index}",
     content,
-    count=1
+    count=1,
+    flags=re.MULTILINE
 )
 
-if "ALSA_DEVICE =" not in content:
+# ------------------------------------------------------------
+# ALSA_DEVICE
+# ------------------------------------------------------------
+
+if mic_card != "null" and mic_device != "null":
+    alsa_device = f'hw:{mic_card},{mic_device}'
+else:
+    alsa_device = "null"
+
+if re.search(r"^\s*ALSA_DEVICE\s*=", content, re.MULTILINE):
+    content = re.sub(
+        r"^\s*ALSA_DEVICE\s*=.*$",
+        f'ALSA_DEVICE = "{alsa_device}"',
+        content,
+        count=1,
+        flags=re.MULTILINE
+    )
+else:
     content = content.replace(
         "DEVICE_INDEX =",
-        f'ALSA_DEVICE = "hw:{card},{dev}"\nDEVICE_INDEX =',
+        f'ALSA_DEVICE = "{alsa_device}"\nDEVICE_INDEX =',
         1
     )
 
 with open(path, "w", encoding="utf-8") as f:
     f.write(content)
 
-PY
+print(
+    f"[OK] transcribe.py configurado: "
+    f"DEVICE_INDEX={device_index}, "
+    f"ALSA_DEVICE={alsa_device}"
+)
+
+PYTHON
 }
 
 # ==============================================================================
@@ -1731,7 +2398,7 @@ configure_magicmirror()
             pttKey: "$PTT_KEY",
             audioOutput: "$OUTPUT_DEVICE",
             spotifyEnabled: $SPOTIFY_ENABLED,
-            model: "qwen2.5:1.5b",
+            model: "$OLLAMA_MODEL",
             hideDelay: 18000,
             autoHideTimeout: 30000
         }
@@ -2000,6 +2667,12 @@ if [ "$USE_GUI" = true ]; then
     select_audio_devices
 
     # --------------------------------------------------------------------------
+    # MODELO DE IA
+    # --------------------------------------------------------------------------
+
+    select_ollama_model
+
+    # --------------------------------------------------------------------------
     # SPOTIFY
     # --------------------------------------------------------------------------
 
@@ -2017,6 +2690,7 @@ else
     fi
 
     select_audio_devices
+    select_ollama_model
     configure_spotify
 
 fi
@@ -2057,11 +2731,43 @@ install_spotify
 
 progress_update 100 "Fase 9/9 — Configurando TuAsistente..."
 
+# ------------------------------------------------------------------------------
+# Guardar configuración de Spotify
+# ------------------------------------------------------------------------------
+
+save_spotify
+
+# ------------------------------------------------------------------------------
+# Instalar Ollama completo
+# ------------------------------------------------------------------------------
+
+if ! install_ollama_system; then
+    echo -e "${RED}[ERROR] No se pudo instalar Ollama.${NC}"
+    abort_install
+fi
+
+# ------------------------------------------------------------------------------
+# Dependencia Node.js para MMM-TuAsistente
+# ------------------------------------------------------------------------------
+
+if ! install_ollama_node; then
+    echo -e "${RED}[ERROR] No se pudo instalar la dependencia Node.js de Ollama.${NC}"
+    abort_install
+fi
+
+# ------------------------------------------------------------------------------
+# Descargar modelo Ollama
+# ------------------------------------------------------------------------------
+
+if ! download_ollama_model; then
+    echo -e "${RED}[ERROR] No se pudo preparar el modelo de Ollama.${NC}"
+    abort_install
+fi
+
 configure_listen_key
 
 configure_transcribe
 
-save_spotify
 
 configure_magicmirror
 
