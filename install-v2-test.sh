@@ -1583,17 +1583,29 @@ configure_spotify()
     if [ "$USE_GUI" = true ]; then
 
         if ! gui_question \
-            "¿Quieres activar Spotify?
+            "¿Quieres activar Spotify Connect?
 
-No necesitas introducir usuario, contraseña,
-Client ID ni Client Secret.
+MMM-TuAsistente se convertirá en un dispositivo
+Spotify Connect que aparecerá directamente en
+la aplicación Spotify.
 
-Se utilizará Spotify Connect mediante librespot.
+No necesitas introducir:
+• Usuario
+• Contraseña
+• Client ID
+• Client Secret
+
+Se instalará Librespot y se configurará
+automáticamente como servicio del sistema.
 
 El dispositivo aparecerá en Spotify como:
-MMM-TuAsistente
 
-¿Quieres activar Spotify?"
+    MMM-TuAsistente
+
+Podrás seleccionarlo desde Spotify para
+reproducir música en el espejo.
+
+¿Quieres activar Spotify Connect?"
         then
             return 0
         fi
@@ -1603,14 +1615,14 @@ MMM-TuAsistente
         SPOTIFY_MODE=$(
             zenity --list \
                 --title="$TITLE" \
-                --text="Selecciona el modo de Spotify:" \
+                --text="Selecciona el modo de Spotify Connect:" \
                 --radiolist \
                 --column="" \
                 --column="ID" \
                 --column="Modo" \
-                TRUE "connect" "Spotify Connect - recomendado" \
+                TRUE "connect" "Spotify Connect — recomendado" \
                 --hide-column=2 \
-                --width=650 \
+                --width=700 \
                 --height=300 \
                 2>/dev/null
         )
@@ -1622,18 +1634,30 @@ MMM-TuAsistente
         if whiptail \
             --title="$TITLE" \
             --yesno \
-            "¿Quieres activar Spotify?
+            "¿Quieres activar Spotify Connect?
 
-No necesitas introducir credenciales.
+MMM-TuAsistente aparecerá directamente en Spotify
+como un dispositivo disponible para reproducir música.
 
-Se utilizará Spotify Connect mediante librespot.
+No necesitas introducir:
 
-El dispositivo aparecerá en Spotify como:
+• Usuario
+• Contraseña
+• Client ID
+• Client Secret
+
+Se instalará Librespot y se configurará
+automáticamente como servicio del sistema.
+
+El dispositivo aparecerá como:
 
     MMM-TuAsistente
 
-¿Quieres activar Spotify?" \
-            20 75
+Podrás seleccionarlo desde Spotify para
+reproducir música en el espejo.
+
+¿Quieres activar Spotify Connect?" \
+            24 78
         then
 
             SPOTIFY_ENABLED="true"
@@ -1646,8 +1670,10 @@ El dispositivo aparecerá en Spotify como:
     if [ "$SPOTIFY_ENABLED" = "true" ]; then
 
         echo
-        echo -e "${GREEN}[OK] Spotify seleccionado: Spotify Connect / librespot.${NC}"
-        echo -e "${BLUE}No se necesitan Client ID ni Client Secret.${NC}"
+        echo -e "${GREEN}[OK] Spotify Connect seleccionado.${NC}"
+        echo -e "${BLUE}[INFO] Se instalará Librespot automáticamente.${NC}"
+        echo -e "${BLUE}[INFO] No se necesitan Client ID ni Client Secret.${NC}"
+        echo -e "${BLUE}[INFO] Nombre del dispositivo: MMM-TuAsistente${NC}"
 
     fi
 }
@@ -1664,22 +1690,30 @@ El dispositivo aparecerá en Spotify como:
 install_spotify()
 {
     echo
-    echo -e "${BLUE}[8/9] Preparando Spotify Connect...${NC}"
+    echo -e "${BLUE}[8/9] Instalando Spotify Connect...${NC}"
 
     if [ "$SPOTIFY_ENABLED" != "true" ]; then
-        echo -e "${YELLOW}[INFO] Spotify desactivado.${NC}"
+        echo -e "${YELLOW}[INFO] Spotify Connect desactivado.${NC}"
         return 0
     fi
 
     if [ "$SIMULATION" = true ]; then
 
-        echo -e "${YELLOW}[SIMULACIÓN] Se comprobaría Librespot precompilado.${NC}"
+        echo -e "${YELLOW}[SIMULACIÓN] Se instalaría Librespot.${NC}"
         echo -e "${YELLOW}[SIMULACIÓN] Arquitectura: aarch64.${NC}"
-        echo -e "${YELLOW}[SIMULACIÓN] Se crearía el servicio systemd.${NC}"
-        echo -e "${GREEN}[OK] Spotify Connect simulado.${NC}"
+        echo -e "${YELLOW}[SIMULACIÓN] Se crearía el servicio Spotify Connect.${NC}"
+        echo -e "${GREEN}[OK] Spotify Connect preparado.${NC}"
 
         return 0
     fi
+
+    echo
+    echo -e "${CYAN}===== SPOTIFY CONNECT =====${NC}"
+    echo
+    echo "[INFO] Instalando Librespot..."
+    echo "[INFO] Dispositivo: MMM-TuAsistente"
+    echo "[INFO] No se necesitan credenciales de Spotify."
+    echo
 
     # --------------------------------------------------------------
     # LIBRESPOT PRECOMPILADO
@@ -1710,7 +1744,7 @@ install_spotify()
         chmod +x "$LIBRESPOT_SOURCE" || abort_install
     fi
 
-    echo "[INFO] Instalando Librespot precompilado..."
+    echo "[INFO] Instalando Librespot..."
 
     sudo install -m 0755 \
         "$LIBRESPOT_SOURCE" \
@@ -1721,7 +1755,7 @@ install_spotify()
         abort_install
     fi
 
-    echo -e "${GREEN}[OK] Librespot precompilado instalado.${NC}"
+    echo -e "${GREEN}[OK] Librespot instalado.${NC}"
 
     echo "[INFO] Versión:"
     "$LIBRESPOT_TARGET" --version 2>/dev/null || true
@@ -1729,6 +1763,9 @@ install_spotify()
     # --------------------------------------------------------------
     # SERVICIO SYSTEMD
     # --------------------------------------------------------------
+
+    echo
+    echo "[INFO] Creando servicio Spotify Connect..."
 
     sudo tee /etc/systemd/system/mmm-tu-asistente-spotify.service > /dev/null <<EOF2
 [Unit]
@@ -1765,7 +1802,9 @@ EOF2
         abort_install
     fi
 
+    echo
     echo -e "${GREEN}[OK] Spotify Connect activo.${NC}"
+    echo -e "${GREEN}[OK] Dispositivo disponible como: MMM-TuAsistente${NC}"
 }
 
 save_spotify()
