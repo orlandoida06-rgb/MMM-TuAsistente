@@ -61,6 +61,12 @@ Module.register("MMM-TuAsistente", {
     this.volumeTimer = null;
     this.volumeCommandActive = false;
 
+    // --------------------------------------------------------
+    // SPOTIFY
+    // --------------------------------------------------------
+
+    this.spotifyEvent = null;
+
     // ========================================================
     // CONFIG
     // ========================================================
@@ -219,6 +225,68 @@ Module.register("MMM-TuAsistente", {
 
         this.updateDom(200);
       }
+    }
+
+
+    // ========================================================
+    // SPOTIFY / LIBRESPOT
+    // ========================================================
+
+    else if (
+      notification === "SPOTIFY_EVENT"
+    ) {
+
+      console.log(
+        "[MMM-TuAsistente] Evento Spotify recibido:",
+        payload
+      );
+
+      // Guardamos el estado para usarlo posteriormente
+      this.spotifyEvent = payload || {};
+
+      // ======================================================
+      // TEMPORIZADOR SPOTIFY
+      // ======================================================
+
+      // Si vuelve a reproducir, cancelamos el temporizador
+      if (
+        this.spotifyEvent.event === "playing" ||
+        this.spotifyEvent.event === "track_changed"
+      ) {
+
+        if (this.spotifyPauseTimer) {
+          clearTimeout(this.spotifyPauseTimer);
+          this.spotifyPauseTimer = null;
+        }
+      }
+
+      // Si se pausa, esperamos 10 segundos antes de ocultar
+      if (
+        this.spotifyEvent.event === "paused"
+      ) {
+
+        if (this.spotifyPauseTimer) {
+          clearTimeout(this.spotifyPauseTimer);
+        }
+
+        this.spotifyPauseTimer =
+          setTimeout(() => {
+
+            const spotifyCard =
+              document.getElementById(
+                "mmm-tu-asistente-spotify"
+              );
+
+            if (spotifyCard) {
+              spotifyCard.remove();
+            }
+
+            this.spotifyPauseTimer = null;
+
+          }, 10000);
+      }
+
+      this.updateDom(100);
     }
 
 
@@ -978,6 +1046,269 @@ Module.register("MMM-TuAsistente", {
 
       document.body.appendChild(
         volumeIndicator
+      );
+    }
+
+
+    // ========================================================
+    // SPOTIFY / LIBRESPOT
+    // ========================================================
+
+    if (
+      this.spotifyEvent &&
+      this.spotifyEvent.event === "track_changed"
+    ) {
+
+      const spotifyCard =
+        document.createElement("div");
+
+      spotifyCard.className =
+        "tu-asistente-spotify";
+
+      spotifyCard.id =
+        "mmm-tu-asistente-spotify";
+
+
+      // ------------------------------------------------------
+      // ICONO
+      // ------------------------------------------------------
+
+      const spotifyIcon =
+        document.createElement("div");
+
+      spotifyIcon.className =
+        "spotify-icon";
+
+      spotifyIcon.textContent =
+        "♫";
+
+
+      // ------------------------------------------------------
+      // INFORMACIÓN
+      // ------------------------------------------------------
+
+      const spotifyInfo =
+        document.createElement("div");
+
+      spotifyInfo.className =
+        "spotify-info";
+
+
+      // ------------------------------------------------------
+      // CANCIÓN
+      // ------------------------------------------------------
+
+      const spotifyTitle =
+        document.createElement("div");
+
+      spotifyTitle.className =
+        "spotify-title";
+
+      spotifyTitle.textContent =
+        this.spotifyEvent.name ||
+        "Sin título";
+
+
+      // ------------------------------------------------------
+      // ARTISTA
+      // ------------------------------------------------------
+
+      const spotifyArtist =
+        document.createElement("div");
+
+      spotifyArtist.className =
+        "spotify-artist";
+
+      spotifyArtist.textContent =
+        this.spotifyEvent.artists ||
+        "Artista desconocido";
+
+
+      // ------------------------------------------------------
+      // ÁLBUM
+      // ------------------------------------------------------
+
+      const spotifyAlbum =
+        document.createElement("div");
+
+      spotifyAlbum.className =
+        "spotify-album";
+
+      spotifyAlbum.textContent =
+        this.spotifyEvent.album ||
+        "";
+
+
+      // ------------------------------------------------------
+      // CONSTRUIR
+      // ------------------------------------------------------
+
+      spotifyInfo.appendChild(
+        spotifyTitle
+      );
+
+      spotifyInfo.appendChild(
+        spotifyArtist
+      );
+
+      if (
+        this.spotifyEvent.album
+      ) {
+
+        spotifyInfo.appendChild(
+          spotifyAlbum
+        );
+      }
+
+      spotifyCard.appendChild(
+        spotifyIcon
+      );
+
+      spotifyCard.appendChild(
+        spotifyInfo
+      );
+
+
+      // ------------------------------------------------------
+      // POSICIÓN
+      // ESQUINA INFERIOR IZQUIERDA
+      // ------------------------------------------------------
+
+      spotifyCard.style.position =
+        "fixed";
+
+      spotifyCard.style.left =
+        "20px";
+
+      spotifyCard.style.bottom =
+        "20px";
+
+      spotifyCard.style.right =
+        "auto";
+
+      spotifyCard.style.top =
+        "auto";
+
+      spotifyCard.style.zIndex =
+        "9999";
+
+
+      // ------------------------------------------------------
+      // ESTILO
+      // ------------------------------------------------------
+
+      spotifyCard.style.display =
+        "flex";
+
+      spotifyCard.style.alignItems =
+        "center";
+
+      spotifyCard.style.gap =
+        "12px";
+
+      spotifyCard.style.padding =
+        "12px 18px";
+
+      spotifyCard.style.borderRadius =
+        "14px";
+
+      spotifyCard.style.background =
+        "rgba(0, 0, 0, 0.82)";
+
+      spotifyCard.style.boxShadow =
+        "0 4px 20px rgba(0,0,0,0.45)";
+
+      spotifyCard.style.fontFamily =
+        "Arial, sans-serif";
+
+      spotifyCard.style.maxWidth =
+        "380px";
+
+
+      // ------------------------------------------------------
+      // ICONO
+      // ------------------------------------------------------
+
+      spotifyIcon.style.fontSize =
+        "34px";
+
+      spotifyIcon.style.fontWeight =
+        "bold";
+
+      spotifyIcon.style.lineHeight =
+        "1";
+
+      spotifyIcon.style.color =
+        "#1DB954";
+
+
+      // ------------------------------------------------------
+      // INFORMACIÓN
+      // ------------------------------------------------------
+
+      spotifyInfo.style.display =
+        "flex";
+
+      spotifyInfo.style.flexDirection =
+        "column";
+
+      spotifyInfo.style.minWidth =
+        "0";
+
+
+      // ------------------------------------------------------
+      // TÍTULO
+      // ------------------------------------------------------
+
+      spotifyTitle.style.fontSize =
+        "20px";
+
+      spotifyTitle.style.fontWeight =
+        "bold";
+
+      spotifyTitle.style.color =
+        "#ffffff";
+
+      spotifyTitle.style.whiteSpace =
+        "nowrap";
+
+      spotifyTitle.style.overflow =
+        "hidden";
+
+      spotifyTitle.style.textOverflow =
+        "ellipsis";
+
+
+      // ------------------------------------------------------
+      // ARTISTA
+      // ------------------------------------------------------
+
+      spotifyArtist.style.fontSize =
+        "16px";
+
+      spotifyArtist.style.color =
+        "#dddddd";
+
+      spotifyArtist.style.marginTop =
+        "3px";
+
+
+      // ------------------------------------------------------
+      // ÁLBUM
+      // ------------------------------------------------------
+
+      spotifyAlbum.style.fontSize =
+        "13px";
+
+      spotifyAlbum.style.color =
+        "#999999";
+
+      spotifyAlbum.style.marginTop =
+        "3px";
+
+
+      document.body.appendChild(
+        spotifyCard
       );
     }
 

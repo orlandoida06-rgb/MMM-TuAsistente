@@ -30,6 +30,15 @@ module.exports = NodeHelper.create({
     this.youtubePlaying = false;
 
     // ========================================================
+    // SPOTIFY / LIBRESPOT - EVENTOS
+    // ========================================================
+
+    this.spotifyEventFile = '/tmp/tuasistente-spotify-event.json';
+    this.spotifyEventWatcher = null;
+
+    this.startSpotifyEventWatcher();
+
+    // ========================================================
     // COMPROBAR MUTE AL ARRANCAR MAGICMIRROR
     // ========================================================
     // Esperamos a que PipeWire/WirePlumber esté disponible
@@ -39,6 +48,72 @@ module.exports = NodeHelper.create({
     setTimeout(() => {
       this.comprobarMuteAlArrancar();
     }, 3000);
+  },
+
+  // ========================================================
+  // SPOTIFY / LIBRESPOT - LEER EVENTOS
+  // ========================================================
+
+  startSpotifyEventWatcher() {
+
+    const fs = require('fs');
+
+    const eventFile = '/tmp/tuasistente-spotify-event.json';
+
+    console.log(
+      '[MMM-TuAsistente] Iniciando monitor de eventos Spotify...'
+    );
+
+    this.spotifyEventWatcher = fs.watch(
+      '/tmp',
+      (eventType, filename) => {
+
+        if (
+          filename !== 'tuasistente-spotify-event.json'
+        ) {
+          return;
+        }
+
+        try {
+
+          if (!fs.existsSync(eventFile)) {
+            return;
+          }
+
+          const data = fs.readFileSync(
+            eventFile,
+            'utf8'
+          ).trim();
+
+          if (!data) {
+            return;
+          }
+
+          const event = JSON.parse(data);
+
+          console.log(
+            '[MMM-TuAsistente] Spotify evento:',
+            event.event,
+            event.name || '',
+            event.artists || '',
+            event.volume || ''
+          );
+
+          this.sendSocketNotification(
+            'SPOTIFY_EVENT',
+            event
+          );
+
+        } catch (error) {
+
+          console.error(
+            '[MMM-TuAsistente] Error leyendo evento Spotify:',
+            error.message
+          );
+
+        }
+      }
+    );
   },
 
   // ========================================================
@@ -750,6 +825,79 @@ async buscarYouTube(query) {
     return null;
   }
 },
+
+  // ==========================================================
+  // SPOTIFY / LIBRESPOT
+  // ==========================================================
+
+  spotifyControl(action) {
+
+    const { execFile } = require('child_process');
+
+    const acciones = {
+      play: ['play'],
+      pause: ['pause'],
+      next: ['next'],
+      previous: ['previous']
+    };
+
+    if (!acciones[action]) {
+      console.error(
+        `[MMM-TuAsistente] Acción Spotify no válida: ${action}`
+      );
+      return;
+    }
+
+    console.log(
+      `[MMM-TuAsistente] Spotify -> ${action}`
+    );
+
+    execFile(
+      'playerctl',
+      acciones[action],
+      {
+        timeout: 5000
+      },
+      (error, stdout, stderr) => {
+
+        if (error) {
+
+          console.error(
+            `[MMM-TuAsistente] Error Spotify (${action}):`,
+            error.message
+          );
+
+          if (stderr) {
+            console.error(
+              `[MMM-TuAsistente] playerctl stderr: ${stderr}`
+            );
+          }
+
+          this.sendSocketNotification(
+            'SPOTIFY_ERROR',
+            {
+              action: action,
+              error: error.message
+            }
+          );
+
+          return;
+        }
+
+        console.log(
+          `[MMM-TuAsistente] Spotify ${action} ejecutado correctamente`
+        );
+
+        this.sendSocketNotification(
+          'SPOTIFY_CONTROL',
+          {
+            action: action
+          }
+        );
+      }
+    );
+  },
+
   async handleChat({ prompt }) {
     let lowerPrompt = prompt.toLowerCase();
 

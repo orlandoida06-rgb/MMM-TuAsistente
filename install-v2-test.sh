@@ -79,6 +79,14 @@ SPOTIFY_REDIRECT_URI=""
 USE_GUI=false
 
 # ==============================================================================
+# MODO SIMULACIÓN
+# ==============================================================================
+# true = prueba segura: NO instala ni modifica nada
+# false = instalación real
+
+SIMULATION=false
+
+# ==============================================================================
 # COMPROBAR MÓDULO
 # ==============================================================================
 
@@ -930,72 +938,66 @@ Se utilizará el dispositivo de audio predeterminado."
 configure_spotify()
 {
     SPOTIFY_ENABLED="false"
-    SPOTIFY_CLIENT_ID=""
-    SPOTIFY_CLIENT_SECRET=""
-    SPOTIFY_REDIRECT_URI=""
+    SPOTIFY_MODE=""
 
     if [ "$USE_GUI" = true ]; then
 
         if ! gui_question \
-            "¿Quieres activar la integración con Spotify?
+            "¿Quieres activar Spotify?
 
-Podrás introducir las credenciales de Spotify en el siguiente paso."
+No necesitas introducir usuario, contraseña,
+Client ID ni Client Secret.
+
+Se utilizará Spotify Connect mediante librespot.
+
+El dispositivo aparecerá en Spotify como:
+MMM-TuAsistente
+
+¿Quieres activar Spotify?"
         then
             return 0
         fi
 
         SPOTIFY_ENABLED="true"
 
-        SPOTIFY_DATA=$(
-            zenity --forms \
+        SPOTIFY_MODE=$(
+            zenity --list \
                 --title="$TITLE" \
-                --text="Introduce las credenciales de Spotify:" \
-                --add-entry="Client ID" \
-                --add-password="Client Secret" \
-                --add-entry="Redirect URI" \
-                --separator="|" \
-                --width=700 \
+                --text="Selecciona el modo de Spotify:" \
+                --radiolist \
+                --column="" \
+                --column="ID" \
+                --column="Modo" \
+                TRUE "connect" "Spotify Connect - recomendado" \
+                --hide-column=2 \
+                --width=650 \
+                --height=300 \
                 2>/dev/null
         )
 
-        [ -n "${SPOTIFY_DATA:-}" ] || abort_install
-
-        IFS='|' read -r \
-            SPOTIFY_CLIENT_ID \
-            SPOTIFY_CLIENT_SECRET \
-            SPOTIFY_REDIRECT_URI <<< "$SPOTIFY_DATA"
+        [ -n "${SPOTIFY_MODE:-}" ] || return 0
 
     else
 
         if whiptail \
             --title="$TITLE" \
             --yesno \
-            "¿Quieres activar Spotify?" \
-            10 60
+            "¿Quieres activar Spotify?
+
+No necesitas introducir credenciales.
+
+Se utilizará Spotify Connect mediante librespot.
+
+El dispositivo aparecerá en Spotify como:
+
+    MMM-TuAsistente
+
+¿Quieres activar Spotify?" \
+            15 70
         then
 
             SPOTIFY_ENABLED="true"
-
-            SPOTIFY_CLIENT_ID=$(whiptail \
-                --title="$TITLE" \
-                --inputbox \
-                "Client ID:" \
-                10 70 \
-                3>&1 1>&2 2>&3) || abort_install
-
-            SPOTIFY_CLIENT_SECRET=$(whiptail \
-                --title="$TITLE" \
-                --passwordbox \
-                "Client Secret:" \
-                10 70 \
-                3>&1 1>&2 2>&3) || abort_install
-
-            SPOTIFY_REDIRECT_URI=$(whiptail \
-                --title="$TITLE" \
-                --inputbox \
-                "Redirect URI:" \
-                10 70 \
-                3>&1 1>&2 2>&3) || abort_install
+            SPOTIFY_MODE="connect"
 
         fi
 
@@ -1003,20 +1005,74 @@ Podrás introducir las credenciales de Spotify en el siguiente paso."
 
     if [ "$SPOTIFY_ENABLED" = "true" ]; then
 
-        if [ -z "$SPOTIFY_CLIENT_ID" ] ||
-           [ -z "$SPOTIFY_CLIENT_SECRET" ] ||
-           [ -z "$SPOTIFY_REDIRECT_URI" ]
-        then
-
-            if [ "$USE_GUI" = true ]; then
-                gui_error "Debes completar todos los campos de Spotify."
-            fi
-
-            abort_install
-
-        fi
+        echo
+        echo -e "${GREEN}[OK] Spotify seleccionado: Spotify Connect / librespot.${NC}"
+        echo -e "${BLUE}No se necesitan Client ID ni Client Secret.${NC}"
 
     fi
+}
+
+
+# ==============================================================================
+# GUARDAR SPOTIFY
+# ==============================================================================
+
+# ==============================================================================
+# INSTALAR SPOTIFY / LIBRESPOT
+# ==============================================================================
+
+install_spotify()
+{
+    echo
+    echo -e "${BLUE}[8/9] Preparando Spotify Connect...${NC}"
+
+    if [ "$SPOTIFY_ENABLED" != "true" ]; then
+        echo -e "${YELLOW}[INFO] Spotify desactivado.${NC}"
+        return 0
+    fi
+
+    if [ "$SIMULATION" = true ]; then
+
+        echo -e "${YELLOW}[SIMULACIÓN] Se comprobaría librespot.${NC}"
+        echo -e "${YELLOW}[SIMULACIÓN] Nombre: MMM-TuAsistente${NC}"
+        echo -e "${YELLOW}[SIMULACIÓN] Backend: rodio${NC}"
+        echo -e "${YELLOW}[SIMULACIÓN] Se crearía el servicio systemd.${NC}"
+        echo -e "${GREEN}[OK] Spotify Connect simulado.${NC}"
+
+        return 0
+    fi
+
+    if [ ! -x "/usr/local/bin/librespot" ]; then
+        echo -e "${RED}[ERROR] No se encontró librespot en /usr/local/bin/librespot.${NC}"
+        abort_install
+    fi
+
+    sudo tee /etc/systemd/system/mmm-tu-asistente-spotify.service > /dev/null <<EOF2
+[Unit]
+Description=MMM-TuAsistente - Spotify Connect
+After=network-online.target pipewire.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+Environment=XDG_RUNTIME_DIR=/run/user/1000
+ExecStart=/usr/local/bin/librespot --name "MMM-TuAsistente" --backend rodio
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF2
+
+    sudo systemctl daemon-reload
+    sudo systemctl enable mmm-tu-asistente-spotify.service
+    sudo systemctl restart mmm-tu-asistente-spotify.service
+
+    systemctl is-active --quiet mmm-tu-asistente-spotify.service ||
+        abort_install
+
+    echo -e "${GREEN}[OK] Spotify Connect activo.${NC}"
 }
 
 # ==============================================================================
@@ -1025,6 +1081,12 @@ Podrás introducir las credenciales de Spotify en el siguiente paso."
 
 save_spotify()
 {
+    if [ "$SIMULATION" = true ]; then
+        echo -e "${YELLOW}[SIMULACIÓN] Se omite creación/modificación de config/spotify.env.${NC}"
+        echo -e "${GREEN}[OK] Configuración de Spotify simulada.${NC}"
+        return 0
+    fi
+
     mkdir -p "$BASE_DIR/config"
 
     SPOTIFY_FILE="$BASE_DIR/config/spotify.env"
@@ -1063,7 +1125,14 @@ EOF2
 install_system_dependencies()
 {
     echo
-    echo -e "${BLUE}[1/8] Instalando dependencias del sistema...${NC}"
+    echo -e "${BLUE}[1/9] Instalando dependencias del sistema...${NC}"
+
+    if [ "$SIMULATION" = true ]; then
+        echo -e "${YELLOW}[SIMULACIÓN] Se omite apt-get update.${NC}"
+        echo -e "${YELLOW}[SIMULACIÓN] Se omite instalación de paquetes del sistema.${NC}"
+        echo -e "${GREEN}[OK] Dependencias del sistema simuladas.${NC}"
+        return 0
+    fi
 
     sudo apt-get update || abort_install
 
@@ -1095,7 +1164,13 @@ install_system_dependencies()
 install_node()
 {
     echo
-    echo -e "${BLUE}[2/8] Comprobando Node.js y npm...${NC}"
+    echo -e "${BLUE}[2/9] Comprobando Node.js y npm...${NC}"
+
+    if [ "$SIMULATION" = true ]; then
+        echo -e "${YELLOW}[SIMULACIÓN] Se comprobaría Node.js y npm.${NC}"
+        echo -e "${GREEN}[OK] Node.js/npm simulados.${NC}"
+        return 0
+    fi
 
     if ! command -v node >/dev/null 2>&1; then
 
@@ -1128,7 +1203,13 @@ install_node()
 install_node_dependencies()
 {
     echo
-    echo -e "${BLUE}[3/8] Instalando dependencias Node...${NC}"
+    echo -e "${BLUE}[3/9] Instalando dependencias Node...${NC}"
+
+    if [ "$SIMULATION" = true ]; then
+        echo -e "${YELLOW}[SIMULACIÓN] Se omite npm install axios.${NC}"
+        echo -e "${GREEN}[OK] Dependencias Node simuladas.${NC}"
+        return 0
+    fi
 
     npm install axios ||
         abort_install
@@ -1143,7 +1224,13 @@ install_node_dependencies()
 install_python_environment()
 {
     echo
-    echo -e "${BLUE}[4/8] Preparando Python...${NC}"
+    echo -e "${BLUE}[4/9] Preparando Python...${NC}"
+
+    if [ "$SIMULATION" = true ]; then
+        echo -e "${YELLOW}[SIMULACIÓN] Se omite creación/modificación del entorno Python.${NC}"
+        echo -e "${GREEN}[OK] Entorno Python simulado.${NC}"
+        return 0
+    fi
 
     if [ ! -d "$BASE_DIR/venv" ]; then
 
@@ -1172,7 +1259,13 @@ install_python_environment()
 install_python_dependencies()
 {
     echo
-    echo -e "${BLUE}[5/8] Instalando librerías Python...${NC}"
+    echo -e "${BLUE}[5/9] Instalando librerías Python...${NC}"
+
+    if [ "$SIMULATION" = true ]; then
+        echo -e "${YELLOW}[SIMULACIÓN] Se omite pip install de las librerías Python.${NC}"
+        echo -e "${GREEN}[OK] Librerías Python simuladas.${NC}"
+        return 0
+    fi
 
     python -m pip install \
         numpy \
@@ -1195,7 +1288,17 @@ install_python_dependencies()
 install_openwakeword()
 {
     echo
-    echo -e "${BLUE}[6/8] Configuración de activación...${NC}"
+    echo -e "${BLUE}[6/9] Configuración de activación...${NC}"
+
+    if [ "$SIMULATION" = true ]; then
+        if [ "$MODE_CHOICE" = "wakeword" ]; then
+            echo -e "${YELLOW}[SIMULACIÓN] Se instalaría OpenWakeWord.${NC}"
+        else
+            echo -e "${YELLOW}[SIMULACIÓN] PTT seleccionado; no se instalaría OpenWakeWord.${NC}"
+        fi
+        echo -e "${GREEN}[OK] Activación simulada.${NC}"
+        return 0
+    fi
 
     if [ "$MODE_CHOICE" = "wakeword" ]; then
 
@@ -1224,7 +1327,14 @@ install_openwakeword()
 install_piper()
 {
     echo
-    echo -e "${BLUE}[7/8] Preparando Piper TTS...${NC}"
+    echo -e "${BLUE}[7/9] Preparando Piper TTS...${NC}"
+
+    if [ "$SIMULATION" = true ]; then
+        echo -e "${YELLOW}[SIMULACIÓN] Se omite descarga/instalación de Piper.${NC}"
+        echo -e "${YELLOW}[SIMULACIÓN] Voz seleccionada: $VOICE${NC}"
+        echo -e "${GREEN}[OK] Piper simulado.${NC}"
+        return 0
+    fi
 
     PIPER_DIR="$BASE_DIR/piper_tts"
 
@@ -1352,6 +1462,12 @@ configure_listen_key()
         return
     fi
 
+    if [ "$SIMULATION" = true ]; then
+        echo -e "${YELLOW}[SIMULACIÓN] Se omite modificación de listen_key.py.${NC}"
+        echo -e "${GREEN}[OK] Configuración de PTT simulada.${NC}"
+        return 0
+    fi
+
     [ -f "$BASE_DIR/listen_key.py" ] || return
 
     cp "$BASE_DIR/listen_key.py" \
@@ -1429,6 +1545,12 @@ PY
 
 configure_transcribe()
 {
+    if [ "$SIMULATION" = true ]; then
+        echo -e "${YELLOW}[SIMULACIÓN] Se omite modificación de transcribe.py.${NC}"
+        echo -e "${GREEN}[OK] Configuración de transcripción simulada.${NC}"
+        return 0
+    fi
+
     [ -f "$BASE_DIR/transcribe.py" ] || return
 
     cp "$BASE_DIR/transcribe.py" \
@@ -1483,7 +1605,7 @@ PY
 
 configure_magicmirror()
 {
-    [ -f "$CONFIG_PATH" ] || return
+    [ -f "$CONFIG_PATH" ] || true
 
     ADD_CONFIG=false
 
@@ -1509,6 +1631,28 @@ configure_magicmirror()
     fi
 
     [ "$ADD_CONFIG" = true ] || return
+
+    if [ "$SIMULATION" = true ]; then
+
+        if [ "$USE_GUI" = true ]; then
+            gui_info "SIMULACIÓN
+
+Se añadiría MMM-TuAsistente automáticamente a config.js.
+
+NO se modificará ningún archivo."
+        else
+            whiptail                 --title="$TITLE"                 --msgbox                 "SIMULACIÓN
+
+Se añadiría MMM-TuAsistente automáticamente a config.js.
+
+NO se modificará ningún archivo."                 12 70
+        fi
+
+        echo -e "${YELLOW}[SIMULACIÓN] Se añadiría MMM-TuAsistente a config.js.${NC}"
+        echo -e "${GREEN}[OK] config.js protegido.${NC}"
+
+        return 0
+    fi
 
     if grep -q 'module: "MMM-TuAsistente"' "$CONFIG_PATH"; then
 
@@ -1902,12 +2046,14 @@ install_openwakeword
 
 install_piper
 
+install_spotify
+
 # ==============================================================================
 # CONFIGURACIONES
-# ==============================================================================
+# ===============================================================================
 
 echo
-echo -e "${BLUE}[8/8] Configurando TuAsistente...${NC}"
+echo -e "${BLUE}[9/9] Configurando TuAsistente...${NC}"
 
 configure_listen_key
 
