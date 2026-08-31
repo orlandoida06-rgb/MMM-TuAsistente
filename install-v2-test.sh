@@ -1219,8 +1219,14 @@ install_ollama_system()
     echo
     echo -e "${CYAN}[INFO] Preparando runtime de Ollama...${NC}"
 
-    sudo ln -sf "$LLAMA_SERVER" \
-        "$OLLAMA_RUNTIME/llama-server" || return 1
+    # Si llama-server ya está exactamente en el runtime, no crear
+    # un enlace simbólico sobre sí mismo.
+    if [ "$LLAMA_SERVER" = "$OLLAMA_RUNTIME/llama-server" ]; then
+        echo -e "${GREEN}[OK] llama-server ya está en el runtime correcto.${NC}"
+    else
+        sudo ln -sf "$LLAMA_SERVER" \
+            "$OLLAMA_RUNTIME/llama-server" || return 1
+    fi
 
     LLAMA_DIR="$(dirname "$LLAMA_SERVER")"
 
