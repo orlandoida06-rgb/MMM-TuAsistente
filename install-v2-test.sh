@@ -70,6 +70,7 @@ MIC_DEVICE="null"
 MIC_NAME="Sistema"
 
 OUTPUT_DEVICE="default"
+OLLAMA_ENABLED="false"
 OLLAMA_MODEL="qwen2.5:1.5b"
 OUTPUT_NAME="Sistema"
 
@@ -1003,6 +1004,79 @@ Se utilizará la salida de audio predeterminada."
 # ==============================================================================
 # INSTALAR DEPENDENCIA NODE OLLAMA
 # ==============================================================================
+
+# ==============================================================================
+# SELECCIONAR SI SE QUIERE INSTALAR OLLAMA
+# ==============================================================================
+
+select_ollama()
+{
+    OLLAMA_ENABLED="false"
+
+    echo
+    echo -e "${CYAN}===== OLLAMA =====${NC}"
+    echo
+
+    if [ "$SIMULATION" = true ]; then
+        echo "[SIMULACIÓN] Se preguntaría si instalar Ollama."
+        OLLAMA_ENABLED="true"
+        return 0
+    fi
+
+    if [ "$USE_GUI" = true ] && command -v zenity >/dev/null 2>&1; then
+
+        if zenity --question             --title="MMM-TuAsistente — Ollama"             --text="¿Quieres instalar y configurar Ollama?
+
+Sí:
+• Instala/prepara Ollama
+• Configura llama-server
+• Instala la dependencia Node de Ollama
+• Permite seleccionar y descargar el modelo
+
+No:
+• No modifica Ollama
+• No instala llama-server
+• No descarga ningún modelo
+
+Si ya tienes Ollama funcionando, puedes elegir NO."             --width=650             2>/dev/null
+        then
+            OLLAMA_ENABLED="true"
+        else
+            OLLAMA_ENABLED="false"
+        fi
+
+    else
+
+        if whiptail             --title="$TITLE"             --yesno             "¿Quieres instalar y configurar Ollama?
+
+SÍ:
+- Instalar/preparar Ollama
+- Configurar llama-server
+- Instalar dependencia Node
+- Seleccionar y descargar modelo
+
+NO:
+- No modificar Ollama
+- No instalar llama-server
+- No descargar modelos
+
+Si ya tienes Ollama funcionando, puedes elegir NO."             18 75
+        then
+            OLLAMA_ENABLED="true"
+        else
+            OLLAMA_ENABLED="false"
+        fi
+
+    fi
+
+    if [ "$OLLAMA_ENABLED" = "true" ]; then
+        echo -e "${GREEN}[OK] Ollama seleccionado para instalación/configuración.${NC}"
+    else
+        echo -e "${YELLOW}[INFO] Ollama omitido.${NC}"
+    fi
+
+    echo
+}
 
 # ==============================================================================
 # SELECCIONAR MODELO OLLAMA
@@ -2780,10 +2854,14 @@ if [ "$USE_GUI" = true ]; then
     select_audio_devices
 
     # --------------------------------------------------------------------------
-    # MODELO DE IA
+    # OLLAMA
     # --------------------------------------------------------------------------
 
-    select_ollama_model
+    select_ollama
+
+    if [ "$OLLAMA_ENABLED" = "true" ]; then
+        select_ollama_model
+    fi
 
     # --------------------------------------------------------------------------
     # SPOTIFY
@@ -2803,7 +2881,13 @@ else
     fi
 
     select_audio_devices
-    select_ollama_model
+
+    select_ollama
+
+    if [ "$OLLAMA_ENABLED" = "true" ]; then
+        select_ollama_model
+    fi
+
     configure_spotify
 
 fi
@@ -2854,27 +2938,50 @@ save_spotify
 # Instalar Ollama completo
 # ------------------------------------------------------------------------------
 
-if ! install_ollama_system; then
-    echo -e "${RED}[ERROR] No se pudo instalar Ollama.${NC}"
-    abort_install
-fi
-
 # ------------------------------------------------------------------------------
-# Dependencia Node.js para MMM-TuAsistente
+# Ollama
 # ------------------------------------------------------------------------------
 
-if ! install_ollama_node; then
-    echo -e "${RED}[ERROR] No se pudo instalar la dependencia Node.js de Ollama.${NC}"
-    abort_install
+if [ "$OLLAMA_ENABLED" = "true" ]; then
+
+    if ! install_ollama_system; then
+        echo -e "${RED}[ERROR] No se pudo instalar Ollama.${NC}"
+        abort_install
+    fi
+
+    # --------------------------------------------------------------------------
+    # Dependencia Node.js para MMM-TuAsistente
+    # --------------------------------------------------------------------------
+
+    if ! install_ollama_node; then
+        echo -e "${RED}[ERROR] No se pudo instalar la dependencia Node.js de Ollama.${NC}"
+        abort_install
+    fi
+
+else
+
+    echo
+    echo -e "${YELLOW}[INFO] Ollama omitido por el usuario.${NC}"
+    echo -e "${YELLOW}[INFO] No se modificará la instalación existente de Ollama.${NC}"
+    echo
+
 fi
 
 # ------------------------------------------------------------------------------
 # Descargar modelo Ollama
 # ------------------------------------------------------------------------------
 
-if ! download_ollama_model; then
-    echo -e "${RED}[ERROR] No se pudo preparar el modelo de Ollama.${NC}"
-    abort_install
+if [ "$OLLAMA_ENABLED" = "true" ]; then
+
+    if ! download_ollama_model; then
+        echo -e "${RED}[ERROR] No se pudo preparar el modelo de Ollama.${NC}"
+        abort_install
+    fi
+
+else
+
+    echo -e "${YELLOW}[INFO] Descarga del modelo Ollama omitida.${NC}"
+
 fi
 
 configure_listen_key
