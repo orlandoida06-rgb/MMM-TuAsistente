@@ -58,305 +58,100 @@ module.exports = NodeHelper.create({
 
     const fs = require('fs');
 
-    const eventFile =
-      '/tmp/tuasistente-spotify-event.json';
+    const eventFile = '/tmp/tuasistente-spotify-event.json';
 
-    const eventQueue =
-      '/tmp/tuasistente-spotify-events.ndjson';
+    console.log(
+      '[MMM-TuAsistente] Iniciando monitor de eventos Spotify...'
+    );
 
-    this.spotifyTrackMetadata =
-      this.spotifyTrackMetadata || {};
+    this.spotifyEventWatcher = fs.watch(
+      '/tmp',
+      (eventType, filename) => {
 
-    this.spotifyLastEventTimestamp =
-      this.spotifyLastEventTimestamp || '';
-
-    this.spotifyQueuePosition =
-      this.spotifyQueuePosition || 0;
-
-    if (this.spotifyEventPoller) {
-      clearInterval(this.spotifyEventPoller);
-    }
-
-    this.spotifyEventPoller =
-      setInterval(() => {
+        if (
+          filename !== 'tuasistente-spotify-event.json'
+        ) {
+          return;
+        }
 
         try {
 
-          // ==================================================
-          // LEER COLA DE EVENTOS
-          // ==================================================
-
-          if (fs.existsSync(eventQueue)) {
-
-            const queueData =
-              fs.readFileSync(
-                eventQueue,
-                'utf8'
-              );
-
-            const lines =
-              queueData
-                .split('\n')
-                .filter(line => line.trim());
-
-            while (
-              this.spotifyQueuePosition <
-              lines.length
-            ) {
-
-              const line =
-                lines[
-                  this.spotifyQueuePosition
-                ];
-
-              this.spotifyQueuePosition++;
-
-              if (!line) {
-                continue;
-              }
-
-              let event;
-
-              try {
-                event =
-                  JSON.parse(line);
-              } catch (error) {
-                console.error(
-                  '[MMM-TuAsistente] Evento Spotify inválido:',
-                  error.message
-                );
-                continue;
-              }
-
-
-              // ==================================================
-              // TRACK_CHANGED
-              // ==================================================
-
-              if (
-                event.event === 'track_changed' &&
-                event.trackId &&
-                event.name
-              ) {
-
-                this.spotifyTrackMetadata = {
-                  trackId:
-                    event.trackId || '',
-
-                  name:
-                    event.name || '',
-
-                  artists:
-                    event.artists || '',
-
-                  album:
-                    event.album || '',
-
-                  uri:
-                    event.uri || '',
-
-                  covers:
-                    event.covers || '',
-
-                  durationMs:
-                    event.durationMs || '0'
-                };
-
-              }
-
-
-              // ==================================================
-              // PLAYING / PAUSED
-              // ==================================================
-
-              if (
-                event.event === 'playing' ||
-                event.event === 'paused'
-              ) {
-
-                event.trackId =
-                  event.trackId ||
-                  this.spotifyTrackMetadata.trackId ||
-                  '';
-
-                event.name =
-                  event.name ||
-                  this.spotifyTrackMetadata.name ||
-                  '';
-
-                event.artists =
-                  event.artists ||
-                  this.spotifyTrackMetadata.artists ||
-                  '';
-
-                event.album =
-                  event.album ||
-                  this.spotifyTrackMetadata.album ||
-                  '';
-
-                event.uri =
-                  event.uri ||
-                  this.spotifyTrackMetadata.uri ||
-                  '';
-
-                event.covers =
-                  event.covers ||
-                  this.spotifyTrackMetadata.covers ||
-                  '';
-
-                event.durationMs =
-                  event.durationMs ||
-                  this.spotifyTrackMetadata.durationMs ||
-                  '0';
-
-              }
-
-
-              // ==================================================
-              // LOG
-              // ==================================================
-
-              console.log(
-                '[MMM-TuAsistente] Spotify evento:',
-                event.event,
-                '|',
-                event.name || '',
-                '|',
-                event.artists || '',
-                '| cover:',
-                event.covers
-                  ? 'SI'
-                  : 'NO'
-              );
-
-
-              // ==================================================
-              // ENVIAR AL FRONTEND
-              // ==================================================
-
-              this.sendSocketNotification(
-                'SPOTIFY_EVENT',
-                event
-              );
-
-            }
-
+          if (!fs.existsSync(eventFile)) {
+            return;
           }
 
+          const data = fs.readFileSync(
+            eventFile,
+            'utf8'
+          ).trim();
 
-          // ==================================================
-          // COMPATIBILIDAD CON EVENTO ACTUAL
-          // ==================================================
-
-          if (fs.existsSync(eventFile)) {
-
-            const data =
-              fs.readFileSync(
-                eventFile,
-                'utf8'
-              ).trim();
-
-            if (data) {
-
-              const event =
-                JSON.parse(data);
-
-              const timestamp =
-                String(
-                  event.timestamp || ''
-                );
-
-              const eventKey =
-                timestamp +
-                ':' +
-                String(event.event || '') +
-                ':' +
-                String(event.trackId || '') +
-                ':' +
-                String(event.positionMs || '');
-
-              if (
-                eventKey !==
-                this.spotifyLastEventTimestamp
-              ) {
-
-                this.spotifyLastEventTimestamp =
-                  eventKey;
-
-                // Solo procesamos este archivo como
-                // respaldo si la cola no existe.
-
-                if (
-                  !fs.existsSync(eventQueue)
-                ) {
-
-                  if (
-                    event.event === 'track_changed' &&
-                    event.trackId &&
-                    event.name
-                  ) {
-
-                    this.spotifyTrackMetadata = {
-                      trackId:
-                        event.trackId || '',
-
-                      name:
-                        event.name || '',
-
-                      artists:
-                        event.artists || '',
-
-                      album:
-                        event.album || '',
-
-                      uri:
-                        event.uri || '',
-
-                      covers:
-                        event.covers || '',
-
-                      durationMs:
-                        event.durationMs || '0'
-                    };
-
-                  }
-
-                  if (
-                    event.event === 'playing' ||
-                    event.event === 'paused'
-                  ) {
-
-                    Object.assign(
-                      event,
-                      this.spotifyTrackMetadata
-                    );
-
-                  }
-
-                  this.sendSocketNotification(
-                    'SPOTIFY_EVENT',
-                    event
-                  );
-
-                }
-
-              }
-
-            }
-
+          if (!data) {
+            return;
           }
+
+          const event = JSON.parse(data);
+
+          // ==================================================
+          // SPOTIFY: conservar metadatos del último track
+          // ==================================================
+
+          if (!this.spotifyTrackMetadata) {
+            this.spotifyTrackMetadata = {};
+          }
+
+          if (
+            event.event === 'track_changed' &&
+            event.name
+          ) {
+            this.spotifyTrackMetadata = {
+              trackId: event.trackId || '',
+              name: event.name || '',
+              artists: event.artists || '',
+              album: event.album || '',
+              uri: event.uri || '',
+              covers: event.covers || '',
+              durationMs: event.durationMs || '0'
+            };
+          }
+
+          // playing / paused llegan normalmente sin metadatos.
+          // Recuperamos la información de la última canción.
+          if (
+            (
+              event.event === 'playing' ||
+              event.event === 'paused'
+            ) &&
+            this.spotifyTrackMetadata.name
+          ) {
+            Object.assign(
+              event,
+              this.spotifyTrackMetadata
+            );
+          }
+
+          console.log(
+            '[MMM-TuAsistente] Spotify evento:',
+            event.event,
+            event.name || '',
+            event.artists || '',
+            event.volume || ''
+          );
+
+          this.sendSocketNotification(
+            'SPOTIFY_EVENT',
+            event
+          );
 
         } catch (error) {
 
           console.error(
-            '[MMM-TuAsistente] Error leyendo eventos Spotify:',
+            '[MMM-TuAsistente] Error leyendo evento Spotify:',
             error.message
           );
 
         }
-
-      }, 250);
-
+      }
+    );
   },
 
   // ========================================================

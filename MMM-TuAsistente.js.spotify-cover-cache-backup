@@ -243,6 +243,12 @@ Module.register("MMM-TuAsistente", {
 
       // ======================================================
       // GUARDAR EVENTO SPOTIFY
+      //
+      // Librespot manda los metadatos completos en
+      // track_changed, pero playing/paused pueden traer
+      // solamente trackId y posición.
+      //
+      // Por eso mezclamos los datos nuevos con los anteriores.
       // ======================================================
 
       const previousSpotifyEvent =
@@ -253,12 +259,22 @@ Module.register("MMM-TuAsistente", {
         ...(payload || {})
       };
 
-      // ======================================================
-      // REINICIAR POSICIÓN AL CAMBIAR / REPRODUCIR
-      // ======================================================
-
+      // Si llega una nueva canción, reiniciamos el reloj local
       if (
-        this.spotifyEvent.event === "track_changed" ||
+        this.spotifyEvent.event === "track_changed"
+      ) {
+
+        this.spotifyProgressStart =
+          Date.now();
+
+        this.spotifyProgressBase =
+          Number(this.spotifyEvent.positionMs) || 0;
+      }
+
+      // Si empieza a reproducir, guardamos el momento
+      // para poder avanzar visualmente aunque Librespot
+      // no envíe eventos de posición continuamente.
+      if (
         this.spotifyEvent.event === "playing"
       ) {
 
@@ -266,55 +282,32 @@ Module.register("MMM-TuAsistente", {
           Date.now();
 
         this.spotifyProgressBase =
-          Number(
-            this.spotifyEvent.positionMs
-          ) || 0;
+          Number(this.spotifyEvent.positionMs) || 0;
       }
 
       // ======================================================
-      // CANCELAR OCULTACIÓN
+      // TEMPORIZADOR SPOTIFY
       // ======================================================
 
+      // Si vuelve a reproducir, cancelamos el temporizador
       if (
         this.spotifyEvent.event === "playing" ||
         this.spotifyEvent.event === "track_changed"
       ) {
 
         if (this.spotifyPauseTimer) {
-
-          clearTimeout(
-            this.spotifyPauseTimer
-          );
-
-          this.spotifyPauseTimer =
-            null;
+          clearTimeout(this.spotifyPauseTimer);
+          this.spotifyPauseTimer = null;
         }
       }
 
-      // ======================================================
-      // ACTUALIZAR TARJETA DIRECTAMENTE
-      // ======================================================
-
-      if (
-        typeof this.updateSpotifyCard === "function"
-      ) {
-
-        this.updateSpotifyCard();
-      }
-
-      // ======================================================
-      // PAUSA
-      // ======================================================
-
+      // Si se pausa, esperamos 10 segundos antes de ocultar
       if (
         this.spotifyEvent.event === "paused"
       ) {
 
         if (this.spotifyPauseTimer) {
-
-          clearTimeout(
-            this.spotifyPauseTimer
-          );
+          clearTimeout(this.spotifyPauseTimer);
         }
 
         this.spotifyPauseTimer =
@@ -329,17 +322,18 @@ Module.register("MMM-TuAsistente", {
               spotifyCard.remove();
             }
 
-            this.spotifyDom =
-              null;
-
-            this.spotifyPauseTimer =
-              null;
+            this.spotifyPauseTimer = null;
 
           }, 10000);
       }
 
       this.updateDom(100);
     }
+
+
+    // ========================================================
+    // VOLUMEN
+    // ========================================================
 
     else if (
       notification === "VOLUME_STATUS"
@@ -895,769 +889,6 @@ Module.register("MMM-TuAsistente", {
   // DOM
   // ==========================================================
 
-  // ==========================================================
-  // SPOTIFY / LIBRESPOT
-  // TARJETA ÚNICA ACTUALIZABLE
-  // ==========================================================
-
-  updateSpotifyCard: function () {
-
-    if (
-      !this.spotifyEvent ||
-      !this.spotifyEvent.name
-    ) {
-      return;
-    }
-
-    const event =
-      this.spotifyEvent;
-
-
-    // ========================================================
-    // CREAR TARJETA UNA SOLA VEZ
-    // ========================================================
-
-    if (
-      !this.spotifyDom ||
-      !document.getElementById(
-        "mmm-tu-asistente-spotify"
-      )
-    ) {
-
-      const card =
-        document.createElement("div");
-
-      card.className =
-        "tu-asistente-spotify";
-
-      card.id =
-        "mmm-tu-asistente-spotify";
-
-
-      // ------------------------------------------------------
-      // PORTADA
-      // ------------------------------------------------------
-
-      const cover =
-        document.createElement("img");
-
-      cover.className =
-        "spotify-cover";
-
-      cover.alt =
-        "Spotify";
-
-      cover.loading =
-        "eager";
-
-
-      // ------------------------------------------------------
-      // CONTENIDO
-      // ------------------------------------------------------
-
-      const content =
-        document.createElement("div");
-
-      content.className =
-        "spotify-content";
-
-
-      // ------------------------------------------------------
-      // TÍTULO
-      // ------------------------------------------------------
-
-      const title =
-        document.createElement("div");
-
-      title.className =
-        "spotify-title";
-
-
-      // ------------------------------------------------------
-      // ARTISTA
-      // ------------------------------------------------------
-
-      const artist =
-        document.createElement("div");
-
-      artist.className =
-        "spotify-artist";
-
-
-      // ------------------------------------------------------
-      // ÁLBUM
-      // ------------------------------------------------------
-
-      const album =
-        document.createElement("div");
-
-      album.className =
-        "spotify-album";
-
-
-      // ------------------------------------------------------
-      // PROGRESO
-      // ------------------------------------------------------
-
-      const progressContainer =
-        document.createElement("div");
-
-      progressContainer.className =
-        "spotify-progress-container";
-
-
-      const progress =
-        document.createElement("div");
-
-      progress.className =
-        "spotify-progress";
-
-
-      progressContainer.appendChild(
-        progress
-      );
-
-
-      // ------------------------------------------------------
-      // TIEMPOS
-      // ------------------------------------------------------
-
-      const timeRow =
-        document.createElement("div");
-
-      timeRow.className =
-        "spotify-time-row";
-
-
-      const elapsed =
-        document.createElement("span");
-
-      const duration =
-        document.createElement("span");
-
-
-      timeRow.appendChild(
-        elapsed
-      );
-
-      timeRow.appendChild(
-        duration
-      );
-
-
-      // ------------------------------------------------------
-      // ESTADO
-      // ------------------------------------------------------
-
-      const status =
-        document.createElement("div");
-
-      status.className =
-        "spotify-status";
-
-
-      // ------------------------------------------------------
-      // CONSTRUIR
-      // ------------------------------------------------------
-
-      content.appendChild(
-        title
-      );
-
-      content.appendChild(
-        artist
-      );
-
-      content.appendChild(
-        album
-      );
-
-      content.appendChild(
-        progressContainer
-      );
-
-      content.appendChild(
-        timeRow
-      );
-
-      content.appendChild(
-        status
-      );
-
-
-      card.appendChild(
-        cover
-      );
-
-      card.appendChild(
-        content
-      );
-
-
-      // ======================================================
-      // TARJETA
-      // ======================================================
-
-      card.style.position =
-        "fixed";
-
-      card.style.left =
-        "20px";
-
-      card.style.bottom =
-        "20px";
-
-      card.style.right =
-        "auto";
-
-      card.style.top =
-        "auto";
-
-      card.style.zIndex =
-        "9999";
-
-      card.style.display =
-        "flex";
-
-      card.style.alignItems =
-        "center";
-
-      card.style.gap =
-        "16px";
-
-      card.style.padding =
-        "14px";
-
-      card.style.borderRadius =
-        "18px";
-
-      card.style.background =
-        "rgba(18, 18, 18, 0.96)";
-
-      card.style.boxShadow =
-        "0 8px 30px rgba(0,0,0,0.55)";
-
-      card.style.fontFamily =
-        "Arial, sans-serif";
-
-      card.style.width =
-        "430px";
-
-      card.style.maxWidth =
-        "calc(100vw - 40px)";
-
-      card.style.boxSizing =
-        "border-box";
-
-
-      // ======================================================
-      // PORTADA
-      // ======================================================
-
-      cover.style.width =
-        "110px";
-
-      cover.style.height =
-        "110px";
-
-      cover.style.objectFit =
-        "cover";
-
-      cover.style.borderRadius =
-        "10px";
-
-      cover.style.flexShrink =
-        "0";
-
-
-      // ======================================================
-      // CONTENIDO
-      // ======================================================
-
-      content.style.display =
-        "flex";
-
-      content.style.flexDirection =
-        "column";
-
-      content.style.minWidth =
-        "0";
-
-      content.style.flex =
-        "1";
-
-
-      // ======================================================
-      // TÍTULO
-      // ======================================================
-
-      title.style.fontSize =
-        "20px";
-
-      title.style.fontWeight =
-        "bold";
-
-      title.style.color =
-        "#ffffff";
-
-      title.style.whiteSpace =
-        "nowrap";
-
-      title.style.overflow =
-        "hidden";
-
-      title.style.textOverflow =
-        "ellipsis";
-
-
-      // ======================================================
-      // ARTISTA
-      // ======================================================
-
-      artist.style.fontSize =
-        "16px";
-
-      artist.style.color =
-        "#dddddd";
-
-      artist.style.marginTop =
-        "4px";
-
-      artist.style.whiteSpace =
-        "nowrap";
-
-      artist.style.overflow =
-        "hidden";
-
-      artist.style.textOverflow =
-        "ellipsis";
-
-
-      // ======================================================
-      // ÁLBUM
-      // ======================================================
-
-      album.style.fontSize =
-        "13px";
-
-      album.style.color =
-        "#999999";
-
-      album.style.marginTop =
-        "3px";
-
-
-      // ======================================================
-      // BARRA
-      // ======================================================
-
-      progressContainer.style.width =
-        "100%";
-
-      progressContainer.style.height =
-        "4px";
-
-      progressContainer.style.marginTop =
-        "13px";
-
-      progressContainer.style.background =
-        "#444444";
-
-      progressContainer.style.borderRadius =
-        "4px";
-
-      progressContainer.style.overflow =
-        "hidden";
-
-
-      progress.style.height =
-        "100%";
-
-      progress.style.background =
-        "#1DB954";
-
-      progress.style.borderRadius =
-        "4px";
-
-      progress.style.transition =
-        "width 0.5s linear";
-
-
-      // ======================================================
-      // TIEMPOS
-      // ======================================================
-
-      timeRow.style.display =
-        "flex";
-
-      timeRow.style.justifyContent =
-        "space-between";
-
-      timeRow.style.fontSize =
-        "11px";
-
-      timeRow.style.color =
-        "#999999";
-
-      timeRow.style.marginTop =
-        "4px";
-
-
-      // ======================================================
-      // ESTADO
-      // ======================================================
-
-      status.style.fontSize =
-        "11px";
-
-      status.style.color =
-        "#1DB954";
-
-      status.style.marginTop =
-        "7px";
-
-
-      // ======================================================
-      // GUARDAR REFERENCIAS
-      // ======================================================
-
-      this.spotifyDom = {
-        card: card,
-        cover: cover,
-        title: title,
-        artist: artist,
-        album: album,
-        progress: progress,
-        elapsed: elapsed,
-        duration: duration,
-        status: status,
-        trackId: ""
-      };
-
-
-      document.body.appendChild(
-        card
-      );
-    }
-
-
-    const dom =
-      this.spotifyDom;
-
-
-    if (!dom) {
-      return;
-    }
-
-
-    // ========================================================
-    // PORTADA
-    // ========================================================
-
-    let coverUrl =
-      "";
-
-    if (event.covers) {
-
-      const coversText =
-        String(event.covers);
-
-      const match =
-        coversText.match(
-          /https?:\/\/[^\s\]\)]+/
-        );
-
-      if (match) {
-        coverUrl = match[0];
-      }
-    }
-
-
-    const trackId =
-      String(
-        event.trackId || ""
-      );
-
-
-    // ========================================================
-    // CAMBIAR PORTADA POR TRACK
-    // ========================================================
-
-    if (
-      trackId &&
-      trackId !== dom.trackId
-    ) {
-
-      dom.trackId =
-        trackId;
-
-
-      if (coverUrl) {
-
-        const separator =
-          coverUrl.includes("?")
-            ? "&"
-            : "?";
-
-        dom.cover.src =
-          coverUrl +
-          separator +
-          "track=" +
-          encodeURIComponent(
-            trackId
-          ) +
-          "&t=" +
-          Date.now();
-
-        dom.cover.style.display =
-          "block";
-
-      } else {
-
-        dom.cover.removeAttribute(
-          "src"
-        );
-
-        dom.cover.style.display =
-          "none";
-      }
-    }
-
-
-    // ========================================================
-    // DATOS
-    // ========================================================
-
-    dom.title.textContent =
-      event.name ||
-      "Sin título";
-
-    dom.artist.textContent =
-      event.artists ||
-      "Artista desconocido";
-
-    dom.album.textContent =
-      event.album ||
-      "";
-
-
-    // ========================================================
-    // TIEMPOS
-    // ========================================================
-
-    const durationMs =
-      Number(
-        event.durationMs
-      ) || 0;
-
-    let positionMs =
-      Number(
-        event.positionMs
-      ) || 0;
-
-
-    if (
-      event.event === "playing" &&
-      this.spotifyProgressStart
-    ) {
-
-      positionMs =
-        this.spotifyProgressBase +
-        (
-          Date.now() -
-          this.spotifyProgressStart
-        );
-    }
-
-
-    if (
-      durationMs > 0 &&
-      positionMs > durationMs
-    ) {
-
-      positionMs =
-        durationMs;
-    }
-
-
-    const formatTime =
-      (ms) => {
-
-        const totalSeconds =
-          Math.max(
-            0,
-            Math.floor(
-              ms / 1000
-            )
-          );
-
-        const minutes =
-          Math.floor(
-            totalSeconds / 60
-          );
-
-        const seconds =
-          totalSeconds % 60;
-
-        return (
-          minutes +
-          ":" +
-          String(
-            seconds
-          ).padStart(
-            2,
-            "0"
-          )
-        );
-      };
-
-
-    dom.elapsed.textContent =
-      formatTime(
-        positionMs
-      );
-
-    dom.duration.textContent =
-      formatTime(
-        durationMs
-      );
-
-
-    // ========================================================
-    // PROGRESO
-    // ========================================================
-
-    let percent =
-      0;
-
-    if (
-      durationMs > 0
-    ) {
-
-      percent =
-        Math.min(
-          100,
-          Math.max(
-            0,
-            (
-              positionMs /
-              durationMs
-            ) * 100
-          )
-        );
-    }
-
-
-    dom.progress.style.width =
-      percent + "%";
-
-
-    // ========================================================
-    // ESTADO
-    // ========================================================
-
-    if (
-      event.event === "paused"
-    ) {
-
-      dom.status.textContent =
-        "❚❚ Pausado";
-
-    } else {
-
-      dom.status.textContent =
-        "▶ Reproduciendo";
-    }
-
-
-    // ========================================================
-    // TEMPORIZADOR DE PROGRESO
-    // ========================================================
-
-    if (
-      event.event === "playing" &&
-      !this.spotifyProgressTimer
-    ) {
-
-      this.spotifyProgressTimer =
-        setInterval(() => {
-
-          if (
-            !this.spotifyDom ||
-            !this.spotifyEvent ||
-            this.spotifyEvent.event !== "playing"
-          ) {
-            return;
-          }
-
-          const currentDuration =
-            Number(
-              this.spotifyEvent.durationMs
-            ) || 0;
-
-          let currentPosition =
-            this.spotifyProgressBase +
-            (
-              Date.now() -
-              this.spotifyProgressStart
-            );
-
-          if (
-            currentDuration > 0 &&
-            currentPosition > currentDuration
-          ) {
-
-            currentPosition =
-              currentDuration;
-          }
-
-          if (
-            this.spotifyDom.elapsed
-          ) {
-
-            this.spotifyDom.elapsed.textContent =
-              formatTime(
-                currentPosition
-              );
-          }
-
-          if (
-            this.spotifyDom.progress &&
-            currentDuration > 0
-          ) {
-
-            this.spotifyDom.progress.style.width =
-              Math.min(
-                100,
-                Math.max(
-                  0,
-                  (
-                    currentPosition /
-                    currentDuration
-                  ) * 100
-                )
-              ) + "%";
-          }
-
-        }, 500);
-    }
-
-
-    if (
-      event.event === "paused" &&
-      this.spotifyProgressTimer
-    ) {
-
-      clearInterval(
-        this.spotifyProgressTimer
-      );
-
-      this.spotifyProgressTimer =
-        null;
-    }
-  },
-
-
   getDom: function () {
 
       // ========================================================
@@ -1862,11 +1093,553 @@ Module.register("MMM-TuAsistente", {
 
     // ========================================================
     // SPOTIFY / LIBRESPOT
-    //
-    // La tarjeta se gestiona mediante updateSpotifyCard().
+    // INTERFAZ MODERNA
     // ========================================================
 
-    this.updateSpotifyCard();
+    // ========================================================
+    // SPOTIFY
+    // Eliminar la tarjeta anterior antes de crear la nueva.
+    // Evita que las portadas antiguas queden apiladas en el DOM.
+    // ========================================================
+
+    const oldSpotifyCard =
+      document.getElementById(
+        "mmm-tu-asistente-spotify"
+      );
+
+    if (oldSpotifyCard) {
+      oldSpotifyCard.remove();
+    }
+
+    if (
+      this.spotifyEvent &&
+      this.spotifyEvent.name
+    ) {
+
+      const spotifyCard =
+        document.createElement("div");
+
+      spotifyCard.className =
+        "tu-asistente-spotify";
+
+      spotifyCard.id =
+        "mmm-tu-asistente-spotify";
+
+      // ======================================================
+      // PORTADA
+      // ======================================================
+
+      const cover =
+        document.createElement("img");
+
+      cover.className =
+        "spotify-cover";
+
+      let coverUrl = "";
+
+      if (
+        this.spotifyEvent.covers
+      ) {
+
+        const coversText =
+          String(this.spotifyEvent.covers);
+
+        const match =
+          coversText.match(
+            /https?:\/\/[^\s\]\)]+/
+          );
+
+        if (match) {
+          coverUrl = match[0];
+        }
+      }
+
+      if (coverUrl) {
+
+        cover.src = coverUrl;
+
+      } else {
+
+        cover.style.display =
+          "none";
+      }
+
+      cover.alt =
+        this.spotifyEvent.album ||
+        "Spotify";
+
+      cover.loading =
+        "eager";
+
+      // ======================================================
+      // CONTENIDO
+      // ======================================================
+
+      const spotifyContent =
+        document.createElement("div");
+
+      spotifyContent.className =
+        "spotify-content";
+
+      // ======================================================
+      // TÍTULO
+      // ======================================================
+
+      const spotifyTitle =
+        document.createElement("div");
+
+      spotifyTitle.className =
+        "spotify-title";
+
+      spotifyTitle.textContent =
+        this.spotifyEvent.name ||
+        "Sin título";
+
+      // ======================================================
+      // ARTISTA
+      // ======================================================
+
+      const spotifyArtist =
+        document.createElement("div");
+
+      spotifyArtist.className =
+        "spotify-artist";
+
+      spotifyArtist.textContent =
+        this.spotifyEvent.artists ||
+        "Artista desconocido";
+
+      // ======================================================
+      // ÁLBUM
+      // ======================================================
+
+      const spotifyAlbum =
+        document.createElement("div");
+
+      spotifyAlbum.className =
+        "spotify-album";
+
+      spotifyAlbum.textContent =
+        this.spotifyEvent.album ||
+        "";
+
+      // ======================================================
+      // TIEMPOS
+      // ======================================================
+
+      const durationMs =
+        Number(
+          this.spotifyEvent.durationMs
+        ) || 0;
+
+      let positionMs =
+        Number(
+          this.spotifyEvent.positionMs
+        ) || 0;
+
+      // Si está reproduciendo, avanzar visualmente
+      if (
+        this.spotifyEvent.event === "playing" &&
+        this.spotifyProgressStart
+      ) {
+
+        positionMs =
+          this.spotifyProgressBase +
+          (
+            Date.now() -
+            this.spotifyProgressStart
+          );
+
+      }
+
+      if (
+        durationMs > 0 &&
+        positionMs > durationMs
+      ) {
+
+        positionMs =
+          durationMs;
+      }
+
+      const formatTime =
+        (ms) => {
+
+          const totalSeconds =
+            Math.max(
+              0,
+              Math.floor(ms / 1000)
+            );
+
+          const minutes =
+            Math.floor(
+              totalSeconds / 60
+            );
+
+          const seconds =
+            totalSeconds % 60;
+
+          return (
+            minutes +
+            ":" +
+            String(seconds).padStart(
+              2,
+              "0"
+            )
+          );
+        };
+
+      // ======================================================
+      // PROGRESO
+      // ======================================================
+
+      const progressContainer =
+        document.createElement("div");
+
+      progressContainer.className =
+        "spotify-progress-container";
+
+      const progress =
+        document.createElement("div");
+
+      progress.className =
+        "spotify-progress";
+
+      let progressPercent = 0;
+
+      if (durationMs > 0) {
+
+        progressPercent =
+          Math.min(
+            100,
+            Math.max(
+              0,
+              (positionMs / durationMs) * 100
+            )
+          );
+      }
+
+      progress.style.width =
+        progressPercent + "%";
+
+      progressContainer.appendChild(
+        progress
+      );
+
+      // ======================================================
+      // TIEMPO
+      // ======================================================
+
+      const timeRow =
+        document.createElement("div");
+
+      timeRow.className =
+        "spotify-time-row";
+
+      const elapsed =
+        document.createElement("span");
+
+      elapsed.textContent =
+        formatTime(positionMs);
+
+      const duration =
+        document.createElement("span");
+
+      duration.textContent =
+        formatTime(durationMs);
+
+      timeRow.appendChild(
+        elapsed
+      );
+
+      timeRow.appendChild(
+        duration
+      );
+
+      // ======================================================
+      // ESTADO
+      // ======================================================
+
+      const status =
+        document.createElement("div");
+
+      status.className =
+        "spotify-status";
+
+      if (
+        this.spotifyEvent.event === "paused"
+      ) {
+
+        status.textContent =
+          "❚❚ Pausado";
+
+      } else {
+
+        status.textContent =
+          "▶ Reproduciendo";
+      }
+
+      // ======================================================
+      // CONSTRUIR CONTENIDO
+      // ======================================================
+
+      spotifyContent.appendChild(
+        spotifyTitle
+      );
+
+      spotifyContent.appendChild(
+        spotifyArtist
+      );
+
+      if (
+        this.spotifyEvent.album
+      ) {
+
+        spotifyContent.appendChild(
+          spotifyAlbum
+        );
+      }
+
+      spotifyContent.appendChild(
+        progressContainer
+      );
+
+      spotifyContent.appendChild(
+        timeRow
+      );
+
+      spotifyContent.appendChild(
+        status
+      );
+
+      spotifyCard.appendChild(
+        cover
+      );
+
+      spotifyCard.appendChild(
+        spotifyContent
+      );
+
+      // ======================================================
+      // POSICIÓN
+      // ======================================================
+
+      spotifyCard.style.position =
+        "fixed";
+
+      spotifyCard.style.left =
+        "20px";
+
+      spotifyCard.style.bottom =
+        "20px";
+
+      spotifyCard.style.right =
+        "auto";
+
+      spotifyCard.style.top =
+        "auto";
+
+      spotifyCard.style.zIndex =
+        "9999";
+
+      // ======================================================
+      // ESTILO PRINCIPAL
+      // ======================================================
+
+      spotifyCard.style.display =
+        "flex";
+
+      spotifyCard.style.alignItems =
+        "center";
+
+      spotifyCard.style.gap =
+        "16px";
+
+      spotifyCard.style.padding =
+        "14px";
+
+      spotifyCard.style.borderRadius =
+        "18px";
+
+      spotifyCard.style.background =
+        "rgba(18, 18, 18, 0.96)";
+
+      spotifyCard.style.boxShadow =
+        "0 8px 30px rgba(0,0,0,0.55)";
+
+      spotifyCard.style.fontFamily =
+        "Arial, sans-serif";
+
+      spotifyCard.style.width =
+        "430px";
+
+      spotifyCard.style.maxWidth =
+        "calc(100vw - 40px)";
+
+      spotifyCard.style.boxSizing =
+        "border-box";
+
+      // ======================================================
+      // PORTADA
+      // ======================================================
+
+      cover.style.width =
+        "110px";
+
+      cover.style.height =
+        "110px";
+
+      cover.style.objectFit =
+        "cover";
+
+      cover.style.borderRadius =
+        "10px";
+
+      cover.style.flexShrink =
+        "0";
+
+      // ======================================================
+      // CONTENIDO
+      // ======================================================
+
+      spotifyContent.style.display =
+        "flex";
+
+      spotifyContent.style.flexDirection =
+        "column";
+
+      spotifyContent.style.minWidth =
+        "0";
+
+      spotifyContent.style.flex =
+        "1";
+
+      // ======================================================
+      // TÍTULO
+      // ======================================================
+
+      spotifyTitle.style.fontSize =
+        "20px";
+
+      spotifyTitle.style.fontWeight =
+        "bold";
+
+      spotifyTitle.style.color =
+        "#ffffff";
+
+      spotifyTitle.style.whiteSpace =
+        "nowrap";
+
+      spotifyTitle.style.overflow =
+        "hidden";
+
+      spotifyTitle.style.textOverflow =
+        "ellipsis";
+
+      // ======================================================
+      // ARTISTA
+      // ======================================================
+
+      spotifyArtist.style.fontSize =
+        "16px";
+
+      spotifyArtist.style.color =
+        "#dddddd";
+
+      spotifyArtist.style.marginTop =
+        "4px";
+
+      spotifyArtist.style.whiteSpace =
+        "nowrap";
+
+      spotifyArtist.style.overflow =
+        "hidden";
+
+      spotifyArtist.style.textOverflow =
+        "ellipsis";
+
+      // ======================================================
+      // ÁLBUM
+      // ======================================================
+
+      spotifyAlbum.style.fontSize =
+        "13px";
+
+      spotifyAlbum.style.color =
+        "#999999";
+
+      spotifyAlbum.style.marginTop =
+        "3px";
+
+      // ======================================================
+      // BARRA
+      // ======================================================
+
+      progressContainer.style.width =
+        "100%";
+
+      progressContainer.style.height =
+        "4px";
+
+      progressContainer.style.marginTop =
+        "13px";
+
+      progressContainer.style.background =
+        "#444444";
+
+      progressContainer.style.borderRadius =
+        "4px";
+
+      progressContainer.style.overflow =
+        "hidden";
+
+      progress.style.height =
+        "100%";
+
+      progress.style.background =
+        "#1DB954";
+
+      progress.style.borderRadius =
+        "4px";
+
+      progress.style.transition =
+        "width 0.5s linear";
+
+      // ======================================================
+      // TIEMPOS
+      // ======================================================
+
+      timeRow.style.display =
+        "flex";
+
+      timeRow.style.justifyContent =
+        "space-between";
+
+      timeRow.style.fontSize =
+        "11px";
+
+      timeRow.style.color =
+        "#999999";
+
+      timeRow.style.marginTop =
+        "4px";
+
+      // ======================================================
+      // ESTADO
+      // ======================================================
+
+      status.style.fontSize =
+        "11px";
+
+      status.style.color =
+        "#1DB954";
+
+      status.style.marginTop =
+        "7px";
+
+      document.body.appendChild(
+        spotifyCard
+      );
+    }
 
 
     // ========================================================

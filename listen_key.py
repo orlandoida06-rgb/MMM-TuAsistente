@@ -14,7 +14,7 @@ transcribe_script = os.path.join(BASE_DIR, "transcribe.py")
 
 
 def find_keyboard():
-    configured = os.environ.get("MMM_TUASISTENTE_KEYBOARD", "null")
+    configured = '/dev/input/by-id/usb-Logitech_USB_Keyboard-event-kbd'
 
     if configured != "null":
 
