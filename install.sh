@@ -71,10 +71,6 @@ MIC_NAME="Sistema"
 OUTPUT_DEVICE="default"
 OUTPUT_NAME="Sistema"
 
-SPOTIFY_ENABLED="false"
-SPOTIFY_CLIENT_ID=""
-SPOTIFY_CLIENT_SECRET=""
-SPOTIFY_REDIRECT_URI=""
 
 USE_GUI=false
 
@@ -924,9 +920,6 @@ Se utilizará el dispositivo de audio predeterminado."
 }
 
 # ==============================================================================
-# SPOTIFY
-# ==============================================================================
-
 configure_spotify()
 {
     SPOTIFY_ENABLED="false"
@@ -1020,9 +1013,6 @@ Podrás introducir las credenciales de Spotify en el siguiente paso."
 }
 
 # ==============================================================================
-# GUARDAR SPOTIFY
-# ==============================================================================
-
 save_spotify()
 {
     mkdir -p "$BASE_DIR/config"
@@ -1033,10 +1023,6 @@ save_spotify()
 
         cat > "$SPOTIFY_FILE" <<EOF2
 # MMM-TuAsistente - Spotify
-SPOTIFY_ENABLED=true
-SPOTIFY_CLIENT_ID=$SPOTIFY_CLIENT_ID
-SPOTIFY_CLIENT_SECRET=$SPOTIFY_CLIENT_SECRET
-SPOTIFY_REDIRECT_URI=$SPOTIFY_REDIRECT_URI
 EOF2
 
         chmod 600 "$SPOTIFY_FILE"
@@ -1045,10 +1031,6 @@ EOF2
 
         cat > "$SPOTIFY_FILE" <<EOF2
 # MMM-TuAsistente - Spotify
-SPOTIFY_ENABLED=false
-SPOTIFY_CLIENT_ID=
-SPOTIFY_CLIENT_SECRET=
-SPOTIFY_REDIRECT_URI=
 EOF2
 
         chmod 600 "$SPOTIFY_FILE"

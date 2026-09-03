@@ -30,13 +30,13 @@ module.exports = NodeHelper.create({
     this.youtubePlaying = false;
 
     // ========================================================
-    // SPOTIFY / LIBRESPOT
+    // SPOTIFY / LIBRESPOT - EVENTOS
     // ========================================================
-    // La interfaz de Spotify se gestiona ahora mediante
-    // MMM-TuAsistente-Spotify.
-    //
-    // El control por voz de Spotify permanece activo más abajo.
-    // ========================================================
+
+    this.spotifyEventFile = '/tmp/tuasistente-spotify-event.json';
+    this.spotifyEventWatcher = null;
+
+    this.startSpotifyEventWatcher();
 
     // ========================================================
     // COMPROBAR MUTE AL ARRANCAR MAGICMIRROR
@@ -54,14 +54,310 @@ module.exports = NodeHelper.create({
   // SPOTIFY / LIBRESPOT - LEER EVENTOS
   // ========================================================
 
-  // ========================================================
-  // SPOTIFY / LIBRESPOT
-  // ========================================================
-  // Spotify tiene ahora su propio módulo:
-  // MMM-TuAsistente-Spotify
-  //
-  // El control por voz de Spotify permanece activo.
-  // ========================================================
+  startSpotifyEventWatcher() {
+
+    const fs = require('fs');
+
+    const eventFile =
+      '/tmp/tuasistente-spotify-event.json';
+
+    const eventQueue =
+      '/tmp/tuasistente-spotify-events.ndjson';
+
+    this.spotifyTrackMetadata =
+      this.spotifyTrackMetadata || {};
+
+    this.spotifyLastEventTimestamp =
+      this.spotifyLastEventTimestamp || '';
+
+    this.spotifyQueuePosition =
+      this.spotifyQueuePosition || 0;
+
+    if (this.spotifyEventPoller) {
+      clearInterval(this.spotifyEventPoller);
+    }
+
+    this.spotifyEventPoller =
+      setInterval(() => {
+
+        try {
+
+          // ==================================================
+          // LEER COLA DE EVENTOS
+          // ==================================================
+
+          if (fs.existsSync(eventQueue)) {
+
+            const queueData =
+              fs.readFileSync(
+                eventQueue,
+                'utf8'
+              );
+
+            const lines =
+              queueData
+                .split('\n')
+                .filter(line => line.trim());
+
+            while (
+              this.spotifyQueuePosition <
+              lines.length
+            ) {
+
+              const line =
+                lines[
+                  this.spotifyQueuePosition
+                ];
+
+              this.spotifyQueuePosition++;
+
+              if (!line) {
+                continue;
+              }
+
+              let event;
+
+              try {
+                event =
+                  JSON.parse(line);
+              } catch (error) {
+                console.error(
+                  '[MMM-TuAsistente] Evento Spotify inválido:',
+                  error.message
+                );
+                continue;
+              }
+
+
+              // ==================================================
+              // TRACK_CHANGED
+              // ==================================================
+
+              if (
+                event.event === 'track_changed' &&
+                event.trackId &&
+                event.name
+              ) {
+
+                this.spotifyTrackMetadata = {
+                  trackId:
+                    event.trackId || '',
+
+                  name:
+                    event.name || '',
+
+                  artists:
+                    event.artists || '',
+
+                  album:
+                    event.album || '',
+
+                  uri:
+                    event.uri || '',
+
+                  covers:
+                    event.covers || '',
+
+                  durationMs:
+                    event.durationMs || '0'
+                };
+
+              }
+
+
+              // ==================================================
+              // PLAYING / PAUSED
+              // ==================================================
+
+              if (
+                event.event === 'playing' ||
+                event.event === 'paused'
+              ) {
+
+                event.trackId =
+                  event.trackId ||
+                  this.spotifyTrackMetadata.trackId ||
+                  '';
+
+                event.name =
+                  event.name ||
+                  this.spotifyTrackMetadata.name ||
+                  '';
+
+                event.artists =
+                  event.artists ||
+                  this.spotifyTrackMetadata.artists ||
+                  '';
+
+                event.album =
+                  event.album ||
+                  this.spotifyTrackMetadata.album ||
+                  '';
+
+                event.uri =
+                  event.uri ||
+                  this.spotifyTrackMetadata.uri ||
+                  '';
+
+                event.covers =
+                  event.covers ||
+                  this.spotifyTrackMetadata.covers ||
+                  '';
+
+                event.durationMs =
+                  event.durationMs ||
+                  this.spotifyTrackMetadata.durationMs ||
+                  '0';
+
+              }
+
+
+              // ==================================================
+              // LOG
+              // ==================================================
+
+              console.log(
+                '[MMM-TuAsistente] Spotify evento:',
+                event.event,
+                '|',
+                event.name || '',
+                '|',
+                event.artists || '',
+                '| cover:',
+                event.covers
+                  ? 'SI'
+                  : 'NO'
+              );
+
+
+              // ==================================================
+              // ENVIAR AL FRONTEND
+              // ==================================================
+
+              this.sendSocketNotification(
+                'SPOTIFY_EVENT',
+                event
+              );
+
+            }
+
+          }
+
+
+          // ==================================================
+          // COMPATIBILIDAD CON EVENTO ACTUAL
+          // ==================================================
+
+          if (fs.existsSync(eventFile)) {
+
+            const data =
+              fs.readFileSync(
+                eventFile,
+                'utf8'
+              ).trim();
+
+            if (data) {
+
+              const event =
+                JSON.parse(data);
+
+              const timestamp =
+                String(
+                  event.timestamp || ''
+                );
+
+              const eventKey =
+                timestamp +
+                ':' +
+                String(event.event || '') +
+                ':' +
+                String(event.trackId || '') +
+                ':' +
+                String(event.positionMs || '');
+
+              if (
+                eventKey !==
+                this.spotifyLastEventTimestamp
+              ) {
+
+                this.spotifyLastEventTimestamp =
+                  eventKey;
+
+                // Solo procesamos este archivo como
+                // respaldo si la cola no existe.
+
+                if (
+                  !fs.existsSync(eventQueue)
+                ) {
+
+                  if (
+                    event.event === 'track_changed' &&
+                    event.trackId &&
+                    event.name
+                  ) {
+
+                    this.spotifyTrackMetadata = {
+                      trackId:
+                        event.trackId || '',
+
+                      name:
+                        event.name || '',
+
+                      artists:
+                        event.artists || '',
+
+                      album:
+                        event.album || '',
+
+                      uri:
+                        event.uri || '',
+
+                      covers:
+                        event.covers || '',
+
+                      durationMs:
+                        event.durationMs || '0'
+                    };
+
+                  }
+
+                  if (
+                    event.event === 'playing' ||
+                    event.event === 'paused'
+                  ) {
+
+                    Object.assign(
+                      event,
+                      this.spotifyTrackMetadata
+                    );
+
+                  }
+
+                  this.sendSocketNotification(
+                    'SPOTIFY_EVENT',
+                    event
+                  );
+
+                }
+
+              }
+
+            }
+
+          }
+
+        } catch (error) {
+
+          console.error(
+            '[MMM-TuAsistente] Error leyendo eventos Spotify:',
+            error.message
+          );
+
+        }
+
+      }, 250);
+
+  },
 
   // ========================================================
   // DETECTAR MUTE AL ARRANCAR
@@ -871,65 +1167,97 @@ async buscarYouTube(query) {
         return;
       }
 
-      const spotifyQuery = query.trim();
+      const searchCommand =
+        `search ${query.trim()}`;
 
       console.log(
-        `[MMM-TuAsistente] 🎤 Spotify voz -> Web API: ${spotifyQuery}`
+        `[MMM-TuAsistente] Spotify preparando búsqueda: ${query.trim()}`
       );
 
-      fetch('http://127.0.0.1:8888/voice-search', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          query: spotifyQuery
-        })
-      })
-        .then(async response => {
+      // Primero activamos Librespot.
+      // Esto evita:
+      // SpircCommand::Load(...) will be ignored while Not Active
 
-          const data =
-            await response.json().catch(() => ({}));
+      sendCommand('activate', (activateError, activateResponse) => {
 
-          if (!response.ok) {
-
-            throw new Error(
-              data.error ||
-              `HTTP ${response.status}`
-            );
-          }
-
-          console.log(
-            `[MMM-TuAsistente] 🎵 Spotify reproduciendo: ${
-              data.result?.title || spotifyQuery
-            }`
-          );
-
-          this.sendSocketNotification(
-            'SPOTIFY_CONTROL',
-            {
-              action: 'search',
-              query: spotifyQuery,
-              result: data.result || null
-            }
-          );
-        })
-        .catch(error => {
-
-          console.error(
-            '[MMM-TuAsistente] ❌ Error búsqueda Spotify por voz:',
-            error.message
-          );
+        if (activateError) {
 
           this.sendSocketNotification(
             'SPOTIFY_ERROR',
             {
               action: 'search',
-              query: spotifyQuery,
-              error: error.message
+              query: query,
+              error: activateError.message
             }
           );
-        });
+
+          return;
+        }
+
+        console.log(
+          '[MMM-TuAsistente] Spotify activado. Preparando búsqueda...'
+        );
+
+        // Pequeña espera para que Spirc termine de pasar
+        // al estado activo antes de enviar Load.
+
+        setTimeout(() => {
+
+          sendCommand(
+            searchCommand,
+            (searchError, response) => {
+
+              if (searchError) {
+
+                this.sendSocketNotification(
+                  'SPOTIFY_ERROR',
+                  {
+                    action: 'search',
+                    query: query,
+                    error: searchError.message
+                  }
+                );
+
+                return;
+              }
+
+              if (response === 'OK search') {
+
+                this.sendSocketNotification(
+                  'SPOTIFY_CONTROL',
+                  {
+                    action: 'search',
+                    query: query
+                  }
+                );
+
+              } else if (response === 'ERROR no_results') {
+
+                this.sendSocketNotification(
+                  'SPOTIFY_ERROR',
+                  {
+                    action: 'search',
+                    query: query,
+                    error: 'no_results'
+                  }
+                );
+
+              } else {
+
+                this.sendSocketNotification(
+                  'SPOTIFY_ERROR',
+                  {
+                    action: 'search',
+                    query: query,
+                    error: response
+                  }
+                );
+              }
+            }
+          );
+
+        }, 500);
+      });
 
       return;
     }
@@ -991,34 +1319,74 @@ async buscarYouTube(query) {
       .replace(/orayno/g, 'doraemon')
       .replace(/oraymon/g, 'doraemon');
     // ==========================================
-    // ==========================================
     // CONTROL DE SPOTIFY POR VOZ
     // ==========================================
 
-    const spotifyPrompt = lowerPrompt
-      .trim()
-      .replace(/[.,!?¿¡]+$/g, '')
-      .replace(/\bescucharse\b/g, 'escuchar')
-      .replace(/\bescucharme\b/g, 'escuchar')
-      .replace(/\bescuchame\b/g, 'escucha');
+    const spotifyPrompt = lowerPrompt.trim();
 
     let spotifyAction = null;
     let spotifyResponse = null;
     let spotifySearchQuery = null;
 
-    const hasSpotify =
-      /\bspotify\b/i.test(spotifyPrompt);
+    // =========================================================
+    // BUSCAR Y REPRODUCIR EN SPOTIFY
+    // =========================================================
+    //
+    // Ejemplos:
+    // "pon Never Gonna Give You Up en Spotify"
+    // "reproduce Queen en Spotify"
+    // "pon Despacito en Spotify"
+    // "busca Hotel California en Spotify"
+    //
+
+    const spotifySearchMatch = spotifyPrompt.match(
+      /^(?:pon|reproduce|reproducir|busca|buscar|búscame|búscame|quiero escuchar|quiero oír)\s+(.+?)\s+(?:en\s+)?spotify$/i
+    );
+
+    if (spotifySearchMatch) {
+
+      spotifySearchQuery = spotifySearchMatch[1]
+        .trim()
+        .replace(/\b(?:la|el)\s+(?:canción|cancion|tema)\s+(?:de\s+)?/i, '')
+        .trim();
+
+      if (spotifySearchQuery) {
+        spotifyAction = 'search';
+        spotifyResponse =
+          `Reproduciendo ${spotifySearchQuery} en Spotify.`;
+      }
+    }
+
+    // =========================================================
+    // REPRODUCIR / REANUDAR
+    // =========================================================
+
+    else if (
+      /\b(pon|reproduce|reproducir|continúa|continua|reanuda|reanudar)\b.*\b(spotify|música|musica|canción|cancion)\b/i.test(spotifyPrompt) ||
+      /\b(spotify|música|musica)\b.*\b(pon|reproduce|reproducir|continúa|continua|reanuda|reanudar)\b/i.test(spotifyPrompt)
+    ) {
+      spotifyAction = 'play';
+      spotifyResponse = 'Reproduciendo música.';
+    }
+
+    // =========================================================
+    // PAUSA
+    // =========================================================
+
+    else if (
+      /\b(pausa|pausar|pause|detén|deten|detener)\b.*\b(spotify|música|musica|canción|cancion)\b/i.test(spotifyPrompt) ||
+      /\b(spotify|música|musica)\b.*\b(pausa|pausar|pause)\b/i.test(spotifyPrompt)
+    ) {
+      spotifyAction = 'pause';
+      spotifyResponse = 'Música en pausa.';
+    }
 
     // =========================================================
     // SIGUIENTE
     // =========================================================
 
-    if (
-      /\b(siguiente|siguiente canción|siguiente cancion|otra canción|otra cancion)\b/i.test(spotifyPrompt) &&
-      (
-        hasSpotify ||
-        /\b(música|musica|canción|cancion|tema)\b/i.test(spotifyPrompt)
-      )
+    else if (
+      /\b(siguiente|siguiente canción|siguiente cancion|otra canción|otra cancion)\b/i.test(spotifyPrompt)
     ) {
       spotifyAction = 'next';
       spotifyResponse = 'Siguiente canción.';
@@ -1036,159 +1404,15 @@ async buscarYouTube(query) {
     }
 
     // =========================================================
-    // PAUSA
-    // =========================================================
-
-    else if (
-      /\b(pausa|pausar|pause|pausa la música|pausa la musica)\b/i.test(spotifyPrompt) &&
-      (
-        hasSpotify ||
-        /\b(música|musica|canción|cancion|tema)\b/i.test(spotifyPrompt)
-      )
-    ) {
-      spotifyAction = 'pause';
-      spotifyResponse = 'Música en pausa.';
-    }
-
-    // =========================================================
     // PARAR
     // =========================================================
 
     else if (
-      /\b(para|parar|detén|deten|detener|stop)\b/i.test(spotifyPrompt) &&
-      (
-        hasSpotify ||
-        /\b(música|musica|reproducción|reproduccion)\b/i.test(spotifyPrompt)
-      )
+      /\b(para|parar|detén|deten|detener|stop)\b.*\b(spotify|música|musica|reproducción|reproduccion)\b/i.test(spotifyPrompt) ||
+      /\b(spotify|música|musica)\b.*\b(para|parar|detén|deten|detener|stop)\b/i.test(spotifyPrompt)
     ) {
       spotifyAction = 'stop';
       spotifyResponse = 'Spotify detenido.';
-    }
-
-    // =========================================================
-    // EVITAR FALSOS POSITIVOS
-    //
-    // Ejemplos:
-    // "No sé qué hay en Spotify"
-    // "Dime qué hay en Spotify"
-    // =========================================================
-
-    else if (
-      hasSpotify &&
-      /\b(qué|que|hay|dime|sabes|cuál|cual|información|informacion)\b/i.test(spotifyPrompt)
-    ) {
-      spotifyAction = null;
-    }
-
-    // =========================================================
-    // BUSCAR ARTISTA / CANCIÓN / TEMA
-    // =========================================================
-
-    else {
-
-      let searchQuery = null;
-
-      // ---------------------------------------------------------
-      // "música de Estopa"
-      // "musica de Sabina"
-      // "canciones de Shakira"
-      // "temas de Queen"
-      // ---------------------------------------------------------
-
-      let match = spotifyPrompt.match(
-        /\b(?:música|musica|canciones|cancion|canciones|temas|tema)\s+(?:de|del)\s+(.+?)(?:\s+en\s+spotify)?$/i
-      );
-
-      if (match) {
-        searchQuery = match[1].trim();
-      }
-
-      // ---------------------------------------------------------
-      // "escuchar a Shakira"
-      // "quiero escuchar a Shakira"
-      // "quiero oír a Shakira"
-      // ---------------------------------------------------------
-
-      if (!searchQuery) {
-        match = spotifyPrompt.match(
-          /\b(?:quiero\s+)?(?:escuchar|oír|oir)\s+(?:a\s+)?(.+?)(?:\s+en\s+spotify)?$/i
-        );
-
-        if (match) {
-          const candidate = match[1].trim();
-
-          if (
-            candidate &&
-            !/^(música|musica|canción|cancion|una canción|una cancion|algo de música|algo de musica)$/i.test(candidate)
-          ) {
-            searchQuery = candidate;
-          }
-        }
-      }
-
-      // ---------------------------------------------------------
-      // "pon Despacito"
-      // "reproduce Queen"
-      // "busca Hotel California"
-      // ---------------------------------------------------------
-
-      if (!searchQuery) {
-        match = spotifyPrompt.match(
-          /^(?:pon|ponme|reproduce|reproducir|busca|buscar|búscame|buscame)\s+(.+?)(?:\s+en\s+spotify)?$/i
-        );
-
-        if (match) {
-          const candidate = match[1]
-            .trim()
-            .replace(
-              /^(?:la|el|una|un)\s+(?:canción|cancion|tema)\s+(?:de\s+)?/i,
-              ''
-            )
-            .trim();
-
-          if (
-            candidate &&
-            !/^(música|musica|canción|cancion|tema|algo de música|algo de musica)$/i.test(candidate)
-          ) {
-            searchQuery = candidate;
-          }
-        }
-      }
-
-      // ---------------------------------------------------------
-      // Si hemos encontrado algo concreto, BUSCAR
-      // ---------------------------------------------------------
-
-      if (searchQuery) {
-
-        spotifySearchQuery = searchQuery;
-
-        spotifyAction = 'search';
-
-        spotifyResponse =
-          `Reproduciendo ${spotifySearchQuery} en Spotify.`;
-      }
-
-      // =========================================================
-      // REPRODUCIR / REANUDAR
-      // =========================================================
-
-      else if (
-        (
-          hasSpotify &&
-          /\b(música|musica|canción|cancion|tema)\b/i.test(spotifyPrompt)
-        ) ||
-        (
-          /\b(pon|ponme|reproduce|reproducir|continúa|continua|reanuda|reanudar|escuchar)\b/i.test(spotifyPrompt) &&
-          (
-            hasSpotify ||
-            /\b(música|musica|canción|cancion|tema)\b/i.test(spotifyPrompt)
-          )
-        )
-      ) {
-        spotifyAction = 'play';
-        spotifyResponse = 'Reproduciendo música.';
-      }
     }
 
     // =========================================================
@@ -1218,6 +1442,7 @@ async buscarYouTube(query) {
       return;
     }
 
+    // ==========================================
     // BÚSQUEDA WEB
     // ==========================================
 

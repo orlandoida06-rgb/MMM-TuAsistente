@@ -262,10 +262,27 @@ def transcribe_audio():
 
         if audio_data.ndim == 2:
 
-            audio_data = np.mean(
-                audio_data,
-                axis=1
+            # Seleccionar automáticamente el canal con mayor señal.
+            # El micrófono USB expone 4 canales, pero la voz puede
+            # estar presente principalmente en uno de ellos.
+            channel_rms = np.sqrt(
+                np.mean(
+                    audio_data * audio_data,
+                    axis=0
+                )
             )
+
+            best_channel = int(
+                np.argmax(channel_rms)
+            )
+
+            print(
+                f"[audio] Canal seleccionado: {best_channel} "
+                f"RMS={channel_rms[best_channel]:.6f}",
+                flush=True
+            )
+
+            audio_data = audio_data[:, best_channel]
 
         audio_data = audio_data.astype(
             np.float32
