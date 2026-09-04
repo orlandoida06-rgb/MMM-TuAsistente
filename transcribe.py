@@ -25,7 +25,8 @@ BLOCKSIZE = 2048
 # No usar un índice fijo: PipeWire puede cambiarlo después de reiniciar.
 # El micrófono USB se identifica por su nombre.
 ALSA_DEVICE = "hw:4,0"
-DEVICE_INDEX = 4
+# El índice SoundDevice se resuelve dinámicamente al arrancar.
+DEVICE_INDEX = None
 
 # Whisper trabajará con MONO
 WHISPER_CHANNELS = 1
