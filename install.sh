@@ -2026,10 +2026,11 @@ select_components()
         INSTALL_AUDIO=true
     fi
 
-    # Spotify necesita Node/npm.
-    # LibreSpot se mantiene independiente.
+    # Spotify necesita Node/npm y LibreSpot para reproducir audio.
     if [ "$INSTALL_SPOTIFY" = true ]; then
+        INSTALL_LIBRESPOT=true
         echo -e "${BLUE}[INFO] MMM-TuAsistente-Spotify requiere Node.js/npm.${NC}"
+        echo -e "${BLUE}[INFO] LibreSpot se seleccionará automáticamente como dependencia.${NC}"
     fi
 
     echo
@@ -2155,22 +2156,29 @@ install_spotify()
     echo
 
     # --------------------------------------------------------------
-    # COMPROBAR DIRECTORIO DEL MÓDULO
+    # DESCARGAR / COMPROBAR MÓDULO
     # --------------------------------------------------------------
 
     SPOTIFY_MODULE_DIR="$(cd "$BASE_DIR/../MMM-TuAsistente-Spotify" && pwd)"
+    SPOTIFY_REPO="https://github.com/orlandoida06-rgb/MMM-TuAsistente-Spotify.git"
 
     if [ ! -d "$SPOTIFY_MODULE_DIR" ]; then
-        echo -e "${RED}[ERROR] No se encontró MMM-TuAsistente-Spotify.${NC}"
         echo
-        echo "Se esperaba:"
-        echo "$SPOTIFY_MODULE_DIR"
+        echo "[INFO] MMM-TuAsistente-Spotify no está instalado."
+        echo "[INFO] Descargando desde GitHub..."
+        echo "[INFO] $SPOTIFY_REPO"
         echo
-        abort_install
-    fi
 
-    echo "[OK] Módulo encontrado:"
-    echo "$SPOTIFY_MODULE_DIR"
+        git clone "$SPOTIFY_REPO" "$SPOTIFY_MODULE_DIR" || {
+            echo -e "${RED}[ERROR] No se pudo descargar MMM-TuAsistente-Spotify.${NC}"
+            abort_install
+        }
+
+        echo -e "${GREEN}[OK] MMM-TuAsistente-Spotify descargado.${NC}"
+    else
+        echo "[OK] Módulo encontrado:"
+        echo "$SPOTIFY_MODULE_DIR"
+    fi
 
     # --------------------------------------------------------------
     # NODE / NPM
