@@ -2188,7 +2188,8 @@ install_spotify()
     # DESCARGAR / COMPROBAR MÓDULO
     # --------------------------------------------------------------
 
-    SPOTIFY_MODULE_DIR="$(cd "$BASE_DIR/../MMM-TuAsistente-Spotify" && pwd)"
+    MODULE_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    SPOTIFY_MODULE_DIR="$MODULE_ROOT/../MMM-TuAsistente-Spotify"
     SPOTIFY_REPO="https://github.com/orlandoida06-rgb/MMM-TuAsistente-Spotify.git"
 
     if [ ! -d "$SPOTIFY_MODULE_DIR" ]; then
@@ -3553,7 +3554,8 @@ PYTHON
 
     if [ "$INSTALL_SPOTIFY" = true ]; then
 
-        SPOTIFY_MODULE_DIR="$(cd "$BASE_DIR/../MMM-TuAsistente-Spotify" && pwd)"
+        MODULE_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    SPOTIFY_MODULE_DIR="$MODULE_ROOT/../MMM-TuAsistente-Spotify"
 
         if [ -f "$SPOTIFY_MODULE_DIR/MMM-TuAsistente-Spotify.js" ] &&
            [ -f "$SPOTIFY_MODULE_DIR/node_helper.js" ]
