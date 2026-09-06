@@ -2795,6 +2795,14 @@ install_piper()
     echo
     echo -e "${BLUE}[7/9] Preparando Piper TTS...${NC}"
 
+    # Piper puede instalarse de forma independiente.
+    # Si no se ha seleccionado una voz previamente, usamos
+    # la voz española recomendada por defecto.
+    if [ -z "${VOICE:-}" ]; then
+        VOICE="es_ES-davefx-medium"
+        echo -e "${YELLOW}[INFO] No se seleccionó una voz. Usando: $VOICE${NC}"
+    fi
+
     if [ "$SIMULATION" = true ]; then
         echo -e "${YELLOW}[SIMULACIÓN] Se omite descarga/instalación de Piper.${NC}"
         echo -e "${YELLOW}[SIMULACIÓN] Voz seleccionada: $VOICE${NC}"
@@ -2813,11 +2821,11 @@ install_piper()
             ;;
 
         aarch64|arm64)
-            PIPER_ARCH="arm64"
+            PIPER_ARCH="aarch64"
             ;;
 
         armv7l|armv7)
-            PIPER_ARCH="armv7"
+            PIPER_ARCH="armv7l"
             ;;
 
         *)
@@ -2837,19 +2845,18 @@ install_piper()
 
         echo "[INFO] Descargando Piper..."
 
-        wget -q --show-progress \
+        rm -f "$TEMP_PIPER"
+
+        wget --show-progress \
             "$PIPER_URL" \
-            -O "$TEMP_PIPER" ||
-            abort_install
+            -O "$TEMP_PIPER" || abort_install
 
         rm -rf "$PIPER_DIR/piper"
 
         mkdir -p "$PIPER_DIR/piper"
 
         tar -xzf "$TEMP_PIPER" \
-            -C "$PIPER_DIR/piper" \
-            --strip-components=1 ||
-            abort_install
+            -C "$PIPER_DIR/piper" || abort_install
 
         rm -f "$TEMP_PIPER"
 
