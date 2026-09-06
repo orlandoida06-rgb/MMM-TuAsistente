@@ -1464,21 +1464,33 @@ install_ollama_system()
 
     LLAMA_DIR="$(dirname "$LLAMA_SERVER")"
 
-    for lib in \
-        libllama-server-impl.so \
-        libllama-common.so.0 \
-        libmtmd.so.0 \
-        libllama.so.0 \
-        libggml.so.0 \
-        libggml-base.so.0
-    do
+    # Si las librerías ya están en el runtime correcto,
+    # no intentar crear enlaces sobre ellas mismas.
+    if [ "$LLAMA_DIR" = "$OLLAMA_RUNTIME" ]; then
 
-        if [ -e "$LLAMA_DIR/$lib" ]; then
-            sudo ln -sf "$LLAMA_DIR/$lib" \
-                "$OLLAMA_RUNTIME/$lib" || return 1
-        fi
+        echo -e "${GREEN}[OK] Las librerías de llama-server ya están en el runtime correcto.${NC}"
 
-    done
+    else
+
+        for lib in \
+            libllama-server-impl.so \
+            libllama-common.so.0 \
+            libmtmd.so.0 \
+            libllama.so.0 \
+            libggml.so.0 \
+            libggml-base.so.0
+        do
+
+            if [ -e "$LLAMA_DIR/$lib" ]; then
+                sudo ln -sf "$LLAMA_DIR/$lib" \
+                    "$OLLAMA_RUNTIME/$lib" || return 1
+            fi
+
+        done
+
+        echo -e "${GREEN}[OK] Enlaces de librerías de llama-server preparados.${NC}"
+
+    fi
 
     echo -e "${GREEN}[OK] Runtime de Ollama preparado.${NC}"
 
@@ -2658,6 +2670,7 @@ install_python_dependencies()
         faster-whisper \
         evdev \
         scipy \
+        yt-dlp \
         -q ||
         abort_install
 
