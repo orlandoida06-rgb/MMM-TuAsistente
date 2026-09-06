@@ -797,6 +797,29 @@ async buscarYouTube(query) {
 },
 
   // ==========================================================
+  // CONTROL MULTIMEDIA
+  // ==========================================================
+  // Evita que Spotify y YouTube reproduzcan simultáneamente.
+  // ==========================================================
+
+  stopYouTubePlayback() {
+
+    if (!this.youtubePlaying) {
+      return;
+    }
+
+    console.log(
+      '[MMM-TuAsistente] Multimedia -> detener YouTube antes de Spotify'
+    );
+
+    this.sendSocketNotification(
+      'STOP_YOUTUBE'
+    );
+
+    this.youtubePlaying = false;
+  },
+
+  // ==========================================================
   // SPOTIFY / LIBRESPOT
   // ==========================================================
 
@@ -861,6 +884,10 @@ async buscarYouTube(query) {
     // =========================================================
 
     if (action === 'search') {
+
+      // Una búsqueda Spotify termina reproduciendo contenido.
+      // Detenemos YouTube antes de iniciar Spotify.
+      this.stopYouTubePlayback();
 
       if (!query || !query.trim()) {
 
@@ -947,6 +974,12 @@ async buscarYouTube(query) {
       );
 
       return;
+    }
+
+    // Spotify va a reproducir/reanudar.
+    // YouTube debe quedar detenido antes.
+    if (action === 'play') {
+      this.stopYouTubePlayback();
     }
 
     sendCommand(command, (error, response) => {
@@ -2000,6 +2033,19 @@ async buscarYouTube(query) {
             console.log(
               `[MMM-TuAsistente] YouTube fullscreen: ${fullscreenYouTube}`
             );
+
+            // ==================================================
+            // EXCLUSIÓN MUTUA SPOTIFY / YOUTUBE
+            // ==================================================
+            // YouTube va a comenzar a reproducirse.
+            // Pausamos Spotify antes de lanzar el vídeo.
+            // ==================================================
+
+            console.log(
+              '[MMM-TuAsistente] Multimedia -> pausar Spotify antes de YouTube'
+            );
+
+            this.spotifyControl('pause');
 
             // Marcar YouTube como reproduciéndose
             this.youtubePlaying = true;
