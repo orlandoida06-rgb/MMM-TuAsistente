@@ -74,3 +74,36 @@ pm2 restart mm
 2. **Ollama** instalado y corriendo en la máquina local (`http://localhost:11434`).
    ```bash
    ollama pull qwen2.5:1.5b
+---
+
+# 🖼️ Capturas del módulo
+
+## 🏠 Interfaz principal
+
+<p align="center">
+<img src="./images/asistente.png" alt="Interfaz principal de MMM-TuAsistente" width="900">
+</p>
+
+## 🎙️ Escuchando
+
+<p align="center">
+<img src="./images/escuchando.png" alt="MMM-TuAsistente escuchando" width="900">
+</p>
+
+## 🧠 Pensando
+
+<p align="center">
+<img src="./images/pensando.png" alt="MMM-TuAsistente procesando" width="900">
+</p>
+
+## 🔊 Volumen
+
+<p align="center">
+<img src="./images/volumen.png" alt="Control de volumen" width="900">
+</p>
+
+## ▶️ YouTube
+
+<p align="center">
+<img src="./images/youtube.png" alt="YouTube en MMM-TuAsistente" width="900">
+</p>
