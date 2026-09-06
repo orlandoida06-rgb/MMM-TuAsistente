@@ -1983,35 +1983,64 @@ select_components()
     # Procesar selección
     # --------------------------------------------------------------------------
 
-    if [[ "$selected" == *"MMM-TuAsistente"* ]]; then
+    # --------------------------------------------------------------------------
+    # Procesar selección de forma EXACTA
+    #
+    # Importante:
+    # "MMM-TuAsistente" NO debe coincidir con
+    # "MMM-TuAsistente-Spotify".
+    # --------------------------------------------------------------------------
+
+    selected_has()
+    {
+        local item="$1"
+        local normalized
+
+        # Zenity utiliza "|" como separador.
+        # Whiptail devuelve los elementos separados por espacios y
+        # normalmente entre comillas.
+        normalized="${selected//\"/}"
+        normalized="${normalized//|/ }"
+
+        case " $normalized " in
+            *" $item "*)
+                return 0
+                ;;
+            *)
+                return 1
+                ;;
+        esac
+    }
+
+    if selected_has "MMM-TuAsistente"; then
         INSTALL_TUASISTENTE=true
     fi
 
-    if [[ "$selected" == *"MMM-TuAsistente-Spotify"* ]]; then
+    if selected_has "MMM-TuAsistente-Spotify"; then
         INSTALL_SPOTIFY=true
     fi
 
-    if [[ "$selected" == *"LibreSpot"* ]]; then
+    if selected_has "LibreSpot"; then
         INSTALL_LIBRESPOT=true
     fi
 
-    if [[ "$selected" == *"Ollama"* ]]; then
+    if selected_has "Ollama"; then
         INSTALL_OLLAMA=true
     fi
 
-    if [[ "$selected" == *"Piper TTS"* ]]; then
+    if selected_has "Piper TTS"; then
         INSTALL_PIPER=true
     fi
 
-    if [[ "$selected" == *"Wake Word / PTT"* ]]; then
+    if selected_has "Wake Word / PTT"; then
         INSTALL_WAKEWORD=true
     fi
 
-    if [[ "$selected" == *"Audio"* ]]; then
+    if selected_has "Audio"; then
         INSTALL_AUDIO=true
     fi
 
-    if [[ "$selected" == *"Configuración automática de MagicMirror"* ]]; then
+    if selected_has "Configuración automática de MagicMirror"; then
         INSTALL_MAGICMIRROR_CONFIG=true
     fi
 
