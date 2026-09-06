@@ -35,3 +35,24 @@ __pycache__/
 *.before-*
 *.broken
 
+
+# Dependencias y recursos generados localmente
+venv/
+node_modules/
+__pycache__/
+*.pyc
+
+# Piper TTS descargado por install.sh
+piper_tts/
+
+# Archivos temporales y copias de trabajo
+*.bak
+*.bak.*
+*.backup
+*.backup.*
+*.before-*
+*.pre_*
+*.broken
+*.old
+*.2
+input.wav
