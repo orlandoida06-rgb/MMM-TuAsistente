@@ -3271,8 +3271,36 @@ import sys
 config_path = sys.argv[1]
 block_path = sys.argv[2]
 
-with open(config_path, "r", encoding="utf-8") as f:
-    content = f.read()
+# ------------------------------------------------------------------
+# Detectar automáticamente la codificación de config.js
+# y conservarla al escribir.
+# ------------------------------------------------------------------
+
+raw = open(config_path, "rb").read()
+
+encodings = [
+    "utf-8-sig",
+    "utf-8",
+    "iso-8859-1",
+    "cp1252",
+]
+
+content = None
+detected_encoding = None
+
+for encoding in encodings:
+    try:
+        content = raw.decode(encoding)
+        detected_encoding = encoding
+        break
+    except UnicodeDecodeError:
+        continue
+
+if content is None:
+    print("[ERROR] No se pudo detectar la codificación de config.js.")
+    sys.exit(1)
+
+print(f"[INFO] Codificación detectada: {detected_encoding}")
 
 with open(block_path, "r", encoding="utf-8") as f:
     block = f.read()
@@ -3289,7 +3317,8 @@ content = content.replace(
     1
 )
 
-with open(config_path, "w", encoding="utf-8") as f:
+# Escribir usando exactamente la codificación detectada.
+with open(config_path, "w", encoding=detected_encoding, newline="") as f:
     f.write(content)
 
 PYTHON
