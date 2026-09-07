@@ -2301,174 +2301,98 @@ install_spotify()
 # INSTALAR LIBRESPOT INDEPENDIENTE
 # ==============================================================================
 
+# ==============================================================================
+# INSTALAR LIBRESPOT
+# ==============================================================================
+
 install_librespot()
 {
     echo
-    echo -e "${BLUE}[LIBRESPOT] Preparando LibreSpot independiente...${NC}"
+    echo -e "${BLUE}[LIBRESPOT] Instalando Spotify / LibreSpot...${NC}"
 
     if [ "$INSTALL_LIBRESPOT" != true ]; then
         echo -e "${YELLOW}[OMITIDO] LibreSpot no seleccionado.${NC}"
         return 0
     fi
 
-    # ------------------------------------------------------------------
-    # SIMULACIÓN
-    # ------------------------------------------------------------------
-
     if [ "$SIMULATION" = true ]; then
-        echo -e "${YELLOW}[SIMULACIÓN] Se comprobaría LibreSpot.${NC}"
+        echo -e "${YELLOW}[SIMULACIÓN] Se comprobaría Spotify / LibreSpot.${NC}"
         echo -e "${YELLOW}[SIMULACIÓN] Servicio: tuasistente-spotify.service${NC}"
         echo -e "${YELLOW}[SIMULACIÓN] Socket: /tmp/tuasistente-spotify.sock${NC}"
-        echo -e "${GREEN}[OK] LibreSpot simulado.${NC}"
-        return 0
-    fi
-
-    echo
-    echo -e "${CYAN}===== LIBRESPOT =====${NC}"
-    echo
-
-    # ------------------------------------------------------------------
-    # ARQUITECTURA
-    # ------------------------------------------------------------------
-
-    ARCH="$(uname -m)"
-
-    case "$ARCH" in
-        aarch64|arm64)
-            echo -e "${GREEN}[OK] Arquitectura compatible: $ARCH${NC}"
-            ;;
-        *)
-            echo -e "${RED}[ERROR] LibreSpot requiere ARM64/aarch64.${NC}"
-            echo "[INFO] Arquitectura detectada: $ARCH"
-            abort_install
-            ;;
-    esac
-
-    # ------------------------------------------------------------------
-    # INSTALACIÓN ACTUAL
-    # ------------------------------------------------------------------
-
-    LIBRESPOT_DIR="/opt/tuasistente/librespot"
-    LIBRESPOT_BIN="$LIBRESPOT_DIR/target/release/librespot"
-    LIBRESPOT_SERVICE="/etc/systemd/system/tuasistente-spotify.service"
-    LIBRESPOT_SOCKET="/tmp/tuasistente-spotify.sock"
-
-    # ------------------------------------------------------------------
-    # SI YA EXISTE UNA INSTALACIÓN FUNCIONAL, NO TOCARLA
-    # ------------------------------------------------------------------
-
-    if [ -x "$LIBRESPOT_BIN" ] &&
-       [ -f "$LIBRESPOT_SERVICE" ]; then
-
-        echo -e "${GREEN}[OK] Instalación de LibreSpot existente detectada.${NC}"
-        echo
-        echo "Binario:"
-        echo "$LIBRESPOT_BIN"
-        echo
-        echo "Servicio:"
-        echo "tuasistente-spotify.service"
-
-        echo
-        echo "[INFO] No se reinstalará LibreSpot."
-        echo "[INFO] Se conservará la instalación existente."
-
-        sudo systemctl daemon-reload >/dev/null 2>&1 || true
-
-        if systemctl is-active --quiet tuasistente-spotify.service; then
-            echo -e "${GREEN}[OK] Servicio LibreSpot activo.${NC}"
-        else
-            echo -e "${YELLOW}[AVISO] Servicio LibreSpot no está activo.${NC}"
-            echo "[INFO] Intentando iniciarlo..."
-
-            sudo systemctl start tuasistente-spotify.service \
-                || abort_install
-
-            sleep 2
-
-            if ! systemctl is-active --quiet tuasistente-spotify.service; then
-                echo -e "${RED}[ERROR] LibreSpot no pudo iniciarse.${NC}"
-                sudo systemctl status \
-                    tuasistente-spotify.service \
-                    --no-pager || true
-                abort_install
-            fi
-
-            echo -e "${GREEN}[OK] Servicio LibreSpot iniciado.${NC}"
-        fi
-
-        if [ -S "$LIBRESPOT_SOCKET" ]; then
-            echo -e "${GREEN}[OK] Socket LibreSpot detectado.${NC}"
-        else
-            echo -e "${YELLOW}[AVISO] Socket todavía no detectado.${NC}"
-            echo "[INFO] Se comprobará cuando el servicio esté operativo."
-        fi
-
-        echo
-        echo -e "${GREEN}[OK] LibreSpot existente conservado.${NC}"
+        echo -e "${GREEN}[OK] Spotify / LibreSpot simulado.${NC}"
         return 0
     fi
 
     # ------------------------------------------------------------------
-    # INSTALACIÓN NUEVA
+    # DIRECTORIO DEL PROYECTO
     # ------------------------------------------------------------------
 
-    echo -e "${YELLOW}[INFO] No se encontró una instalación completa de LibreSpot.${NC}"
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    SPOTIFY_DIR="$SCRIPT_DIR/MMM-TuAsistente-Spotify"
+    SPOTIFY_INSTALLER="$SPOTIFY_DIR/install_spotify.sh"
+
     echo
-    echo "[INFO] Esta versión del instalador requiere preparar LibreSpot"
-    echo "[INFO] desde el repositorio independiente del proyecto."
+    echo "[INFO] Módulo Spotify:"
+    echo "       $SPOTIFY_DIR"
+
+    # ------------------------------------------------------------------
+    # COMPROBAR INSTALADOR DEL MÓDULO
+    # ------------------------------------------------------------------
+
+    if [ ! -f "$SPOTIFY_INSTALLER" ]; then
+        echo -e "${RED}[ERROR] No existe el instalador de Spotify:${NC}"
+        echo "        $SPOTIFY_INSTALLER"
+        echo
+        echo "[ERROR] MMM-TuAsistente-Spotify debe contener install_spotify.sh."
+        abort_install
+    fi
+
+    if [ ! -x "$SPOTIFY_INSTALLER" ]; then
+        chmod +x "$SPOTIFY_INSTALLER" || abort_install
+    fi
+
+    echo -e "${GREEN}[OK] Instalador Spotify encontrado.${NC}"
+
+    # ------------------------------------------------------------------
+    # DELEGAR TODA LA INSTALACIÓN AL MÓDULO SPOTIFY
+    # ------------------------------------------------------------------
+
+    echo
+    echo -e "${CYAN}[INFO] Delegando instalación de LibreSpot al módulo Spotify...${NC}"
     echo
 
-    if [ ! -d "$LIBRESPOT_DIR/.git" ]; then
-        echo -e "${RED}[ERROR] No existe el repositorio LibreSpot en:${NC}"
-        echo "$LIBRESPOT_DIR"
-        echo
-        echo "[INFO] No se realizará una instalación alternativa antigua."
-        echo "[INFO] Esto evita crear el servicio obsoleto"
+    bash "$SPOTIFY_INSTALLER" || abort_install
+
+    # ------------------------------------------------------------------
+    # COMPROBACIÓN FINAL
+    # ------------------------------------------------------------------
+
+    echo
+    echo "[INFO] Comprobando integración Spotify..."
+
+    if [ ! -x "/opt/tuasistente/librespot/target/release/librespot" ]; then
+        echo -e "${RED}[ERROR] No existe el binario LibreSpot.${NC}"
         abort_install
     fi
-
-    echo -e "${GREEN}[OK] Repositorio LibreSpot encontrado.${NC}"
-
-    if [ ! -x "$LIBRESPOT_BIN" ]; then
-        echo -e "${YELLOW}[INFO] El binario de LibreSpot todavía no está compilado.${NC}"
-        echo
-        echo "[INFO] Compilación de LibreSpot pendiente."
-        echo "[INFO] No se modificará la instalación actual automáticamente."
-        abort_install
-    fi
-
-    echo -e "${GREEN}[OK] Binario LibreSpot encontrado.${NC}"
-
-    if [ ! -f "$LIBRESPOT_SERVICE" ]; then
-        echo -e "${RED}[ERROR] Falta el servicio:${NC}"
-        echo "$LIBRESPOT_SERVICE"
-        abort_install
-    fi
-
-    sudo systemctl daemon-reload || abort_install
-    sudo systemctl enable tuasistente-spotify.service || abort_install
-    sudo systemctl start tuasistente-spotify.service || abort_install
-
-    sleep 2
 
     if ! systemctl is-active --quiet tuasistente-spotify.service; then
-        echo -e "${RED}[ERROR] LibreSpot no está activo.${NC}"
+        echo -e "${RED}[ERROR] El servicio Spotify no está activo.${NC}"
         sudo systemctl status \
             tuasistente-spotify.service \
-            --no-pager || true
+            --no-pager \
+            -n 30 || true
         abort_install
     fi
 
-    echo -e "${GREEN}[OK] LibreSpot activo.${NC}"
-
-    if [ -S "$LIBRESPOT_SOCKET" ]; then
-        echo -e "${GREEN}[OK] Socket LibreSpot disponible.${NC}"
-    else
-        echo -e "${YELLOW}[AVISO] Socket LibreSpot todavía no detectado.${NC}"
+    if [ ! -S "/tmp/tuasistente-spotify.sock" ]; then
+        echo -e "${RED}[ERROR] No existe el socket TuAsistente.${NC}"
+        echo "        /tmp/tuasistente-spotify.sock"
+        abort_install
     fi
 
-    echo
-    echo -e "${GREEN}[OK] LibreSpot preparado.${NC}"
+    echo -e "${GREEN}[OK] LibreSpot instalado.${NC}"
+    echo -e "${GREEN}[OK] Servicio Spotify activo.${NC}"
+    echo -e "${GREEN}[OK] Socket Spotify activo.${NC}"
 }
 
 # ==============================================================================
