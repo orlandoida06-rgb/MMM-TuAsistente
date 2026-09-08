@@ -107,3 +107,66 @@ pm2 restart mm
 <p align="center">
 <img src="./images/youtube.png" alt="YouTube en MMM-TuAsistente" width="900">
 </p>
+
+## 🎛️ Control de módulos por voz
+
+MMM-TuAsistente permite controlar la visibilidad de otros módulos de MagicMirror mediante comandos de voz.
+
+El asistente permanece visible mientras controla el resto de módulos.
+
+### Comandos disponibles
+
+#### Ocultar y mostrar todos los módulos
+
+- **"Oculta todo"**
+- **"Muestra todo"**
+
+#### Control del tiempo
+
+- **"Oculta el tiempo"**
+- **"Muestra el tiempo"**
+- También se reconocen referencias como "clima" o "weather".
+
+#### Control de Spotify
+
+- **"Oculta Spotify"**
+- **"Muestra Spotify"**
+- También se reconocen comandos relacionados con "música".
+
+#### Control de noticias
+
+- **"Oculta las noticias"**
+- **"Muestra las noticias"**
+- También se reconoce "noticia".
+
+### Funcionamiento
+
+El control de visibilidad está integrado directamente en `MMM-TuAsistente`, sin necesidad de instalar un módulo adicional.
+
+Cuando se reconoce un comando:
+
+1. El asistente identifica la acción (`ocultar` o `mostrar`).
+2. Identifica el grupo de módulos afectado.
+3. Envía la orden al frontend de MagicMirror.
+4. Los módulos realizan una transición animada.
+5. El asistente confirma la acción mediante voz.
+
+Los grupos actualmente disponibles son:
+
+- `all` — todos los módulos controlables.
+- `weather` — módulos meteorológicos.
+- `spotify` — MMM-TuAsistente-Spotify.
+- `news` — módulo de noticias.
+
+`MMM-TuAsistente` no se oculta mediante el comando "Oculta todo", por lo que siempre permanece disponible para recibir nuevos comandos de voz.
+
+### Perfiles de pantalla
+
+La arquitectura de control de visibilidad permite ampliar el sistema posteriormente con perfiles completos de pantalla, por ejemplo:
+
+- **Modo limpio** — interfaz mínima.
+- **Modo información** — reloj, tiempo, calendario y noticias.
+- **Modo música** — interfaz centrada en Spotify.
+- **Modo noche** — pantalla prácticamente limpia.
+
+Estos perfiles podrán activarse también mediante comandos de voz.
