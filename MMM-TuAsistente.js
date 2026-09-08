@@ -118,6 +118,22 @@ Module.register("MMM-TuAsistente", {
   // SOCKET
   // ==========================================================
 
+  setModulesVisibility: function (action, target) {
+    const modules = {
+      all: ["MMM-TuAsistente-Spotify","alert","updatenotification","clock","calendar","compliments","weather","MMM-WeatherHero","newsfeed"],
+      weather: ["weather","MMM-WeatherHero"],
+      spotify: ["MMM-TuAsistente-Spotify"],
+      news: ["newsfeed"]
+    };
+    (modules[target] || modules.all).forEach(name => {
+      MM.getModules().enumerate(module => {
+        if (module.name === name) {
+          if (action === "hide") module.hide(300);
+          if (action === "show") module.show(300);
+        }
+      });
+    });
+  },
   socketNotificationReceived:
     function (notification, payload) {
 
@@ -125,6 +141,12 @@ Module.register("MMM-TuAsistente", {
     // ========================================================
     // ESTADO
     // ========================================================
+
+    if (notification === "MODULE_VISIBILITY") {
+      this.setModulesVisibility(payload.action, payload.target);
+      return;
+    }
+
 
     if (notification === "STATUS") {
 

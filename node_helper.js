@@ -1025,6 +1025,58 @@ async buscarYouTube(query) {
       .replace(/oraymon/g, 'doraemon');
     // ==========================================
     // ==========================================
+    // ==========================================
+    // CONTROL DE MÓDULOS POR VOZ
+    // ==========================================
+
+    let visibilityAction = null;
+    let visibilityTarget = "all";
+    let visibilityResponse = null;
+
+    if (/\b(oculta|ocultar|esconde|esconder|quita|quitar)\b/i.test(lowerPrompt) && /\b(todo|todos|todas)\b/i.test(lowerPrompt)) {
+      visibilityAction = "hide";
+      visibilityResponse = "He ocultado todos los módulos.";
+    } else if (/\b(muestra|mostrar|enseña|enséñame|ensename)\b/i.test(lowerPrompt) && /\b(todo|todos|todas)\b/i.test(lowerPrompt)) {
+      visibilityAction = "show";
+      visibilityResponse = "He mostrado todos los módulos.";
+    } else if (/\b(oculta|ocultar|esconde|esconder|quita|quitar)\b/i.test(lowerPrompt) && /\b(tiempo|clima|weather)\b/i.test(lowerPrompt)) {
+      visibilityAction = "hide";
+      visibilityTarget = "weather";
+      visibilityResponse = "He ocultado el tiempo.";
+    } else if (/\b(muestra|mostrar|enseña|enséñame|ensename)\b/i.test(lowerPrompt) && /\b(tiempo|clima|weather)\b/i.test(lowerPrompt)) {
+      visibilityAction = "show";
+      visibilityTarget = "weather";
+      visibilityResponse = "He mostrado el tiempo.";
+    } else if (/\b(oculta|ocultar|esconde|esconder|quita|quitar)\b/i.test(lowerPrompt) && /\b(spotify|música|musica)\b/i.test(lowerPrompt)) {
+      visibilityAction = "hide";
+      visibilityTarget = "spotify";
+      visibilityResponse = "He ocultado Spotify.";
+    } else if (/\b(muestra|mostrar|enseña|enséñame|ensename)\b/i.test(lowerPrompt) && /\b(spotify|música|musica)\b/i.test(lowerPrompt)) {
+      visibilityAction = "show";
+      visibilityTarget = "spotify";
+      visibilityResponse = "He mostrado Spotify.";
+    } else if (/\b(oculta|ocultar|esconde|esconder|quita|quitar)\b/i.test(lowerPrompt) && /\b(noticias|noticia)\b/i.test(lowerPrompt)) {
+      visibilityAction = "hide";
+      visibilityTarget = "news";
+      visibilityResponse = "He ocultado las noticias.";
+    } else if (/\b(muestra|mostrar|enseña|enséñame|ensename)\b/i.test(lowerPrompt) && /\b(noticias|noticia)\b/i.test(lowerPrompt)) {
+      visibilityAction = "show";
+      visibilityTarget = "news";
+      visibilityResponse = "He mostrado las noticias.";
+    }
+
+    if (visibilityAction) {
+      console.log(`[MMM-TuAsistente] Visibilidad por voz: ${visibilityAction} -> ${visibilityTarget}`);
+      this.sendSocketNotification("MODULE_VISIBILITY", {
+        action: visibilityAction,
+        target: visibilityTarget
+      });
+      this.speakText(visibilityResponse);
+      this.sendSocketNotification("ASSISTANT_RESPONSE", visibilityResponse);
+      this.isThinking = false;
+      return;
+    }
+
     // CONTROL DE SPOTIFY POR VOZ
     // ==========================================
 
