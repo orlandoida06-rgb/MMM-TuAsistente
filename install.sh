@@ -1933,8 +1933,7 @@ select_components()
                 --column="Componente" \
                 --column="Descripción" \
                 FALSE "MMM-TuAsistente" "Asistente de voz e IA" \
-                FALSE "MMM-TuAsistente-Spotify" "Interfaz y control de Spotify" \
-                FALSE "LibreSpot" "Spotify Connect independiente" \
+                FALSE "MMM-TuAsistente-Spotify" "Interfaz, control y reproducción de Spotify" \
                 FALSE "Ollama" "Motor de IA local" \
                 FALSE "Piper TTS" "Síntesis de voz" \
                 FALSE "Wake Word / PTT" "Activación por voz o teclado" \
@@ -1964,10 +1963,7 @@ select_components()
                 "Asistente de voz e IA" \
                 OFF \
                 "MMM-TuAsistente-Spotify" \
-                "Interfaz y control de Spotify" \
-                OFF \
-                "LibreSpot" \
-                "Spotify Connect independiente" \
+                "Interfaz, control y reproducción de Spotify" \
                 OFF \
                 "Ollama" \
                 "Motor de IA local" \
@@ -2032,10 +2028,6 @@ select_components()
         INSTALL_SPOTIFY=true
     fi
 
-    if selected_has "LibreSpot"; then
-        INSTALL_LIBRESPOT=true
-    fi
-
     if selected_has "Ollama"; then
         INSTALL_OLLAMA=true
     fi
@@ -2067,11 +2059,11 @@ select_components()
         INSTALL_AUDIO=true
     fi
 
-    # Spotify necesita Node/npm y LibreSpot para reproducir audio.
+    # Spotify incluye LibreSpot automáticamente para reproducir audio.
     if [ "$INSTALL_SPOTIFY" = true ]; then
         INSTALL_LIBRESPOT=true
         echo -e "${BLUE}[INFO] MMM-TuAsistente-Spotify requiere Node.js/npm.${NC}"
-        echo -e "${BLUE}[INFO] LibreSpot se seleccionará automáticamente como dependencia.${NC}"
+        echo -e "${BLUE}[INFO] LibreSpot se instalará automáticamente como parte de Spotify.${NC}"
     fi
 
     echo
@@ -2081,10 +2073,7 @@ select_components()
         echo -e "${GREEN}✓ MMM-TuAsistente${NC}"
 
     [ "$INSTALL_SPOTIFY" = true ] && \
-        echo -e "${GREEN}✓ MMM-TuAsistente-Spotify${NC}"
-
-    [ "$INSTALL_LIBRESPOT" = true ] && \
-        echo -e "${GREEN}✓ LibreSpot${NC}"
+        echo -e "${GREEN}✓ MMM-TuAsistente-Spotify + LibreSpot${NC}"
 
     [ "$INSTALL_OLLAMA" = true ] && \
         echo -e "${GREEN}✓ Ollama${NC}"
@@ -2131,7 +2120,7 @@ MMM-TuAsistente-Spotify proporciona:
 • Controles
 • Portadas
 
-LibreSpot se gestiona mediante su propio componente.
+LibreSpot se instala y configura automáticamente como parte de Spotify.
 
 ¿Quieres activar Spotify?"
         then
@@ -2156,7 +2145,7 @@ MMM-TuAsistente-Spotify proporciona:
 • Controles
 • Portadas
 
-LibreSpot se gestiona mediante su propio componente.
+LibreSpot se instala y configura automáticamente como parte de Spotify.
 
 ¿Quieres activar Spotify?" \
             20 78
@@ -2171,8 +2160,7 @@ LibreSpot se gestiona mediante su propio componente.
 
     echo
     echo -e "${GREEN}[OK] Integración Spotify seleccionada.${NC}"
-    echo -e "${BLUE}[INFO] MMM-TuAsistente-Spotify se instalará de forma independiente.${NC}"
-    echo -e "${BLUE}[INFO] LibreSpot se gestiona mediante su propio componente.${NC}"
+    echo -e "${BLUE}[INFO] MMM-TuAsistente-Spotify y LibreSpot se instalarán conjuntamente.${NC}"
 }
 
 install_spotify()
@@ -2279,18 +2267,6 @@ install_spotify()
         || abort_install
 
     echo -e "${GREEN}[OK] Código de MMM-TuAsistente-Spotify correcto.${NC}"
-
-    # --------------------------------------------------------------
-    # SOCKET LIBRESPOT
-    # --------------------------------------------------------------
-
-    if [ -S "/tmp/tuasistente-spotify.sock" ]; then
-        echo -e "${GREEN}[OK] Socket LibreSpot detectado.${NC}"
-    else
-        echo -e "${YELLOW}[AVISO] Socket LibreSpot no detectado.${NC}"
-        echo "[INFO] El módulo Spotify podrá instalarse, pero LibreSpot"
-        echo "[INFO] deberá estar seleccionado o instalado por separado."
-    fi
 
     echo
     echo -e "${GREEN}[OK] MMM-TuAsistente-Spotify preparado.${NC}"
@@ -3748,14 +3724,10 @@ show_summary()
     fi
 
     if [ "$INSTALL_SPOTIFY" = true ]; then
-        SUMMARY+="Spotify: ✓ Módulo independiente\n"
-    fi
-
-    if [ "$INSTALL_LIBRESPOT" = true ]; then
         if [ -S "/tmp/tuasistente-spotify.sock" ]; then
-            SUMMARY+="LibreSpot: ✓ Servicio y socket disponibles\n"
+            SUMMARY+="Spotify + LibreSpot: ✓ Módulo, servicio y socket disponibles\n"
         else
-            SUMMARY+="LibreSpot: ⚠ Socket no detectado\n"
+            SUMMARY+="Spotify + LibreSpot: ⚠ Socket no detectado\n"
         fi
     fi
 
@@ -3902,19 +3874,6 @@ if [ "$INSTALL_SPOTIFY" = true ]; then
 fi
 
 
-# ------------------------------------------------------------------------------
-# LibreSpot
-# ------------------------------------------------------------------------------
-
-if [ "$INSTALL_LIBRESPOT" = true ]; then
-
-    echo
-    echo -e "${GREEN}[OK] LibreSpot seleccionado.${NC}"
-    echo -e "${BLUE}[INFO] Se preparará como servicio independiente.${NC}"
-    echo
-
-fi
-
 
 # ==============================================================================
 # INSTALACIÓN
@@ -4001,35 +3960,22 @@ else
 fi
 
 # ------------------------------------------------------------------------------
-# Spotify independiente
+# Spotify + LibreSpot
 # ------------------------------------------------------------------------------
 
 if [ "$INSTALL_SPOTIFY" = true ]; then
 
-    progress_update 70 "Preparando MMM-TuAsistente-Spotify..."
+    progress_update 70 "Preparando Spotify..."
 
     configure_spotify
     install_spotify
 
-else
-    echo -e "${YELLOW}[OMITIDO] MMM-TuAsistente-Spotify no seleccionado.${NC}"
-fi
+    progress_update 75 "Instalando LibreSpot..."
 
-# ------------------------------------------------------------------------------
-# LibreSpot independiente
-# ------------------------------------------------------------------------------
-
-if [ "$INSTALL_LIBRESPOT" = true ]; then
-
-    progress_update 75 "Preparando LibreSpot..."
-
-    echo -e "${BLUE}[INFO] LibreSpot seleccionado.${NC}"
-
-    # La función actual de instalación se conectará aquí.
     install_librespot
 
 else
-    echo -e "${YELLOW}[OMITIDO] LibreSpot no seleccionado.${NC}"
+    echo -e "${YELLOW}[OMITIDO] MMM-TuAsistente-Spotify no seleccionado.${NC}"
 fi
 
 # ------------------------------------------------------------------------------
