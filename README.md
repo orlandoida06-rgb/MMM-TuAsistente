@@ -160,6 +160,24 @@ Los grupos actualmente disponibles son:
 
 `MMM-TuAsistente` no se oculta mediante el comando "Oculta todo", por lo que siempre permanece disponible para recibir nuevos comandos de voz.
 
+## ⭐ Ocultar todo menos determinados módulos
+
+MMM-TuAsistente permite ocultar todos los módulos excepto los indicados mediante una única orden de voz.
+
+Ejemplos:
+
+- **"Oculta todo menos el reloj"**
+- **"Oculta todo menos el reloj y Spotify"**
+- **"Oculta todo menos Spotify y el tiempo"**
+- **"Oculta todo menos el reloj, Spotify y las noticias"**
+- **"Deja visible solo el reloj y Spotify"**
+
+El sistema puede controlar varios módulos en una misma orden y utiliza los módulos que están realmente cargados en MagicMirror.
+
+No es necesario instalar `MMM-ModuleHider` ni otro módulo adicional.
+
+`MMM-TuAsistente` permanece protegido y no se oculta mediante las órdenes globales.
+
 ### Perfiles de pantalla
 
 La arquitectura de control de visibilidad permite ampliar el sistema posteriormente con perfiles completos de pantalla, por ejemplo:
