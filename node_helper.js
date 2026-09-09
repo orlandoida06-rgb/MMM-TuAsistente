@@ -1030,39 +1030,202 @@ async buscarYouTube(query) {
     // ==========================================
 
     let visibilityAction = null;
+    console.log(`[MMM-TuAsistente] DEBUG lowerPrompt: "${lowerPrompt}"`);
     let visibilityTarget = "all";
     let visibilityResponse = null;
 
-    if (/\b(oculta|ocultar|esconde|esconder|quita|quitar)\b/i.test(lowerPrompt) && /\b(todo|todos|todas)\b/i.test(lowerPrompt)) {
-      visibilityAction = "hide";
-      visibilityResponse = "He ocultado todos los módulos.";
-    } else if (/\b(muestra|mostrar|enseña|enséñame|ensename)\b/i.test(lowerPrompt) && /\b(todo|todos|todas)\b/i.test(lowerPrompt)) {
-      visibilityAction = "show";
-      visibilityResponse = "He mostrado todos los módulos.";
-    } else if (/\b(oculta|ocultar|esconde|esconder|quita|quitar)\b/i.test(lowerPrompt) && /\b(tiempo|clima|weather)\b/i.test(lowerPrompt)) {
-      visibilityAction = "hide";
-      visibilityTarget = "weather";
-      visibilityResponse = "He ocultado el tiempo.";
-    } else if (/\b(muestra|mostrar|enseña|enséñame|ensename)\b/i.test(lowerPrompt) && /\b(tiempo|clima|weather)\b/i.test(lowerPrompt)) {
-      visibilityAction = "show";
-      visibilityTarget = "weather";
-      visibilityResponse = "He mostrado el tiempo.";
-    } else if (/\b(oculta|ocultar|esconde|esconder|quita|quitar)\b/i.test(lowerPrompt) && /\b(spotify|música|musica)\b/i.test(lowerPrompt)) {
-      visibilityAction = "hide";
-      visibilityTarget = "spotify";
-      visibilityResponse = "He ocultado Spotify.";
-    } else if (/\b(muestra|mostrar|enseña|enséñame|ensename)\b/i.test(lowerPrompt) && /\b(spotify|música|musica)\b/i.test(lowerPrompt)) {
-      visibilityAction = "show";
-      visibilityTarget = "spotify";
-      visibilityResponse = "He mostrado Spotify.";
-    } else if (/\b(oculta|ocultar|esconde|esconder|quita|quitar)\b/i.test(lowerPrompt) && /\b(noticias|noticia)\b/i.test(lowerPrompt)) {
-      visibilityAction = "hide";
-      visibilityTarget = "news";
-      visibilityResponse = "He ocultado las noticias.";
-    } else if (/\b(muestra|mostrar|enseña|enséñame|ensename)\b/i.test(lowerPrompt) && /\b(noticias|noticia)\b/i.test(lowerPrompt)) {
-      visibilityAction = "show";
-      visibilityTarget = "news";
-      visibilityResponse = "He mostrado las noticias.";
+    // ---------------------------------------------------------
+    // OCULTAR TODO MENOS LOS MÓDULOS INDICADOS
+    // Ejemplos:
+    // "oculta todo menos el reloj"
+    // "oculta todo menos el reloj y Spotify"
+    // "deja visible solo el reloj y las noticias"
+    // ---------------------------------------------------------
+
+    const keepVisibleMatch =
+      lowerPrompt.match(
+        /\b(?:oculta|ocultar|esconde|esconder|quita|quitar)\s+(?:todo|todos|todas)[,;:]?\s+(?:menos|excepto|salvo)\s+(.+)/i
+      ) ||
+      lowerPrompt.match(
+        /\b(?:deja|dejar)\s+(?:visible|visibles)\s+(?:solo|únicamente|unicamente)\s+(.+)/i
+      );
+
+    if (keepVisibleMatch) {
+      const aliases = {
+        "reloj": "clock",
+        "calendario": "calendar",
+        "tiempo": "weather",
+        "clima": "weather",
+        "weather": "weather",
+        "spotify": "MMM-TuAsistente-Spotify",
+        "música": "MMM-TuAsistente-Spotify",
+        "musica": "MMM-TuAsistente-Spotify",
+        "noticias": "newsfeed",
+        "noticia": "newsfeed",
+        "news": "newsfeed"
+      };
+
+      const visibleNames = keepVisibleMatch[1]
+        .toLowerCase()
+        .replace(/\s*,\s*/g, " y ")
+        .split(/\s+(?:y|e)\s+/)
+        .map(name =>
+          name
+            .trim()
+            .replace(/[.,;:!?]+$/g, "")
+            .replace(/\b(el|la|los|las|un|una|módulo|modulo)\b/gi, "")
+            .trim()
+        )
+        .filter(Boolean)
+        .map(name => aliases[name] || name);
+
+      if (visibleNames.length) {
+        visibilityAction = "hide";
+        visibilityTarget = visibleNames;
+
+        const labels = {
+          clock: "el reloj",
+          calendar: "el calendario",
+          weather: "el tiempo",
+          "MMM-TuAsistente-Spotify": "Spotify",
+          newsfeed: "las noticias"
+        };
+
+        visibilityResponse =
+          `He ocultado todo menos ${visibleNames
+            .map(name => labels[name] || name)
+            .join(" y ")}.`;
+
+        console.log(
+          `[MMM-TuAsistente] Visibilidad: ocultar todo menos ${visibleNames.join(", ")}`
+        );
+      }
+    }
+
+    // ---------------------------------------------------------
+    // CONTROL NORMAL DE VISIBILIDAD
+    // ---------------------------------------------------------
+
+    if (!visibilityAction) {
+      if (
+        /\b(oculta|ocultar|esconde|esconder|quita|quitar)\b/i.test(lowerPrompt) &&
+        /\b(todo|todos|todas)\b/i.test(lowerPrompt)
+      ) {
+        visibilityAction = "hide";
+        visibilityTarget = "all";
+        visibilityResponse = "He ocultado todos los módulos.";
+
+      } else if (
+        /\b(muestra|mostrar|enseña|enséñame|ensename)\b/i.test(lowerPrompt) &&
+        /\b(todo|todos|todas)\b/i.test(lowerPrompt)
+      ) {
+        visibilityAction = "show";
+        visibilityTarget = "all";
+        visibilityResponse = "He mostrado todos los módulos.";
+
+      } else if (
+        /\b(oculta|ocultar|esconde|esconder|quita|quitar)\b/i.test(lowerPrompt) &&
+        /\b(tiempo|clima|weather)\b/i.test(lowerPrompt)
+      ) {
+        visibilityAction = "hide";
+        visibilityTarget = "weather";
+        visibilityResponse = "He ocultado el tiempo.";
+
+      } else if (
+        /\b(muestra|mostrar|enseña|enséñame|ensename)\b/i.test(lowerPrompt) &&
+        /\b(tiempo|clima|weather)\b/i.test(lowerPrompt)
+      ) {
+        visibilityAction = "show";
+        visibilityTarget = "weather";
+        visibilityResponse = "He mostrado el tiempo.";
+
+      } else if (
+        /\b(oculta|ocultar|esconde|esconder|quita|quitar)\b/i.test(lowerPrompt) &&
+        /\b(spotify|música|musica)\b/i.test(lowerPrompt)
+      ) {
+        visibilityAction = "hide";
+        visibilityTarget = "spotify";
+        visibilityResponse = "He ocultado Spotify.";
+
+      } else if (
+        /\b(muestra|mostrar|enseña|enséñame|ensename)\b/i.test(lowerPrompt) &&
+        /\b(spotify|música|musica)\b/i.test(lowerPrompt)
+      ) {
+        visibilityAction = "show";
+        visibilityTarget = "spotify";
+        visibilityResponse = "He mostrado Spotify.";
+
+      } else if (
+        /\b(oculta|ocultar|esconde|esconder|quita|quitar)\b/i.test(lowerPrompt) &&
+        /\b(noticias|noticia)\b/i.test(lowerPrompt)
+      ) {
+        visibilityAction = "hide";
+        visibilityTarget = "news";
+        visibilityResponse = "He ocultado las noticias.";
+
+      } else if (
+        /\b(muestra|mostrar|enseña|enséñame|ensename)\b/i.test(lowerPrompt) &&
+        /\b(noticias|noticia)\b/i.test(lowerPrompt)
+      ) {
+        visibilityAction = "show";
+        visibilityTarget = "news";
+        visibilityResponse = "He mostrado las noticias.";
+      }
+    }
+
+    // =========================================================
+    // CONTROL GENÉRICO DE CUALQUIER MÓDULO
+    // =========================================================
+    // Permite:
+    // "oculta clock"
+    // "muestra calendar"
+    // "oculta MMM-Camera"
+    // "muestra el módulo MMM-Camera"
+    // =========================================================
+
+    if (!visibilityAction) {
+      const hideWords = /\b(oculta|ocultar|esconde|esconder|quita|quitar)\b/i;
+      const showWords = /\b(muestra|mostrar|enseña|enséñame|ensename)\b/i;
+
+      let genericAction = null;
+
+      if (hideWords.test(lowerPrompt)) {
+        genericAction = "hide";
+      } else if (showWords.test(lowerPrompt)) {
+        genericAction = "show";
+      }
+
+      if (genericAction) {
+        let genericTarget = lowerPrompt
+          .replace(hideWords, "")
+          .replace(showWords, "")
+          .replace(/\b(el|la|los|las|un|una|módulo|modulo)\b/gi, "")
+          .replace(/^\s+|\s+$/g, "")
+          .replace(/\s+/g, " ");
+
+        const aliases = {
+          "reloj": "clock",
+          "calendario": "calendar",
+          "tiempo": "weather",
+          "clima": "weather",
+          "spotify": "MMM-TuAsistente-Spotify",
+          "noticias": "newsfeed",
+          "noticia": "newsfeed"
+        };
+
+        if (aliases[genericTarget]) {
+          genericTarget = aliases[genericTarget];
+        }
+
+        if (genericTarget && genericTarget !== "todos" && genericTarget !== "todo") {
+          visibilityAction = genericAction;
+          visibilityTarget = genericTarget;
+          visibilityResponse =
+            genericAction === "hide"
+              ? `He ocultado ${genericTarget}.`
+              : `He mostrado ${genericTarget}.`;
+        }
+      }
     }
 
     if (visibilityAction) {

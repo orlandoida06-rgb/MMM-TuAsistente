@@ -119,20 +119,80 @@ Module.register("MMM-TuAsistente", {
   // ==========================================================
 
   setModulesVisibility: function (action, target) {
-    const modules = {
-      all: ["MMM-TuAsistente-Spotify","alert","updatenotification","clock","calendar","compliments","weather","MMM-WeatherHero","newsfeed"],
-      weather: ["weather","MMM-WeatherHero"],
-      spotify: ["MMM-TuAsistente-Spotify"],
-      news: ["newsfeed"]
-    };
-    (modules[target] || modules.all).forEach(name => {
-      MM.getModules().enumerate(module => {
-        if (module.name === name) {
-          if (action === "hide") module.hide(300);
-          if (action === "show") module.show(300);
+    const protectedModules = [
+      "MMM-TuAsistente"
+    ];
+
+    const allModules = [];
+    MM.getModules().enumerate(module => {
+      if (!protectedModules.includes(module.name)) {
+        allModules.push(module);
+      }
+    });
+
+    // "Oculta todo menos..."
+    if (Array.isArray(target) && action === "hide") {
+      const requested = target.map(name =>
+        String(name).toLowerCase().trim()
+      );
+
+      allModules.forEach(module => {
+        const moduleName = module.name.toLowerCase();
+
+        const keepVisible = requested.some(request =>
+          moduleName === request ||
+          moduleName.includes(request) ||
+          request.includes(moduleName)
+        );
+
+        if (keepVisible) {
+          module.show(300);
+        } else {
+          module.hide(300);
         }
       });
-    });
+
+      return;
+    }
+
+    // Ocultar todos los módulos excepto TuAsistente.
+    if (action === "hide" && (target === "all" || !target)) {
+      allModules.forEach(module => {
+        module.hide(300);
+      });
+      return;
+    }
+
+    // Mostrar todos los módulos excepto TuAsistente.
+    if (action === "show" && (target === "all" || !target)) {
+      allModules.forEach(module => {
+        module.show(300);
+      });
+      return;
+    }
+
+    // Ocultar o mostrar un módulo concreto.
+    if (typeof target === "string") {
+      const requested = target.toLowerCase().trim();
+
+      allModules.forEach(module => {
+        const moduleName = module.name.toLowerCase();
+
+        if (
+          moduleName === requested ||
+          moduleName.includes(requested) ||
+          requested.includes(moduleName)
+        ) {
+          if (action === "hide") {
+            module.hide(300);
+          }
+
+          if (action === "show") {
+            module.show(300);
+          }
+        }
+      });
+    }
   },
   socketNotificationReceived:
     function (notification, payload) {
