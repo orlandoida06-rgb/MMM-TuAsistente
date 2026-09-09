@@ -68,12 +68,14 @@ pm2 restart mm
 
 ---
 
-## 🛠️ Requisitos Previos
+## 👤 Sobre el proyecto
 
-1. **MagicMirror²** instalado y en funcionamiento.
-2. **Ollama** instalado y corriendo en la máquina local (`http://localhost:11434`).
-   ```bash
-   ollama pull qwen2.5:1.5b
+**MMM-TuAsistente** ha sido desarrollado originalmente para **uso personal**, como un asistente de voz local integrado en MagicMirror².
+
+El proyecto se ha desarrollado y probado en una **Orange Pi 5 Plus**, utilizando sus recursos locales para el procesamiento de voz, síntesis de voz, inteligencia artificial y reproducción multimedia.
+
+El objetivo principal es crear un asistente integrado en MagicMirror capaz de controlar diferentes funciones de la pantalla mediante comandos de voz, manteniendo el procesamiento local siempre que sea posible.
+
 ---
 
 # 🖼️ Capturas del módulo
