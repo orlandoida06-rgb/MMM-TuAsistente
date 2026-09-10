@@ -474,6 +474,50 @@ module.exports = NodeHelper.create({
 
       if (query !== '') {
         this.isThinking = true;
+
+        // ======================================================
+        // AYUDA DIRECTA
+        // ======================================================
+        // "Ayuda" NO pasa por Ollama.
+        // Se detecta directamente tras la transcripción.
+        const normalizedQuery = query
+          .toLowerCase()
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .replace(/[¡!¿?.,;:]/g, " ")
+          .replace(/\s+/g, " ")
+          .trim();
+
+        const directHelp =
+          /^(ayuda|ayudas)$/.test(normalizedQuery) ||
+          /^(ayuda|ayudas) por favor$/.test(normalizedQuery);
+
+        if (directHelp) {
+
+          console.log(
+            '[MMM-TuAsistente] 🆘 AYUDA DIRECTA — sin Ollama'
+          );
+
+          this.sendSocketNotification(
+            'USER_QUERY',
+            query
+          );
+
+          this.sendSocketNotification(
+            'HELP_SHOW',
+            {
+              category: null
+            }
+          );
+
+          this.speakText(
+            'Aquí tienes todo lo que puedo hacer.'
+          );
+
+          this.isThinking = false;
+          return;
+        }
+
         this.sendSocketNotification('USER_QUERY', query);
         this.sendSocketNotification('STATUS', 'Pensando...');
 
@@ -1154,6 +1198,13 @@ async buscarYouTube(query) {
   async handleChat({ prompt }) {
     let lowerPrompt = prompt.toLowerCase();
 
+    // Normalizar signos de puntuación para comandos por voz.
+    // Ejemplo: "¡Ayuda!" -> "ayuda"
+    lowerPrompt = lowerPrompt
+      .replace(/[¡!¿?.,;:]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
     // Correcciones habituales del reconocimiento de voz
     lowerPrompt = lowerPrompt
       .replace(/muéltame/g, 'muéstrame')
@@ -1171,6 +1222,162 @@ async buscarYouTube(query) {
     // ==========================================
     // ==========================================
     // ==========================================
+    // =========================================================
+    // AYUDA POR VOZ
+    // =========================================================
+
+    const helpCloseCommand =
+      /\b(cerrar|cierra|salir|sal|ocultar|oculta|quitar|quita)\b.*\b(ayuda|ayudas)\b/i.test(lowerPrompt) ||
+      /\b(ayuda|ayudas)\b.*\b(cerrar|cierra|salir|sal|ocultar|oculta|quitar|quita)\b/i.test(lowerPrompt);
+
+
+    const helpCategoryMatch =
+      /\bayuda\b.*\b(spotify|música|musica|youtube|volumen|módulos|modulos|actualizaciones?|conversación|conversacion)\b/i.exec(lowerPrompt);
+
+
+    const helpOpenCommand =
+      /^\s*(ayuda|ayudas)\s*$/i.test(lowerPrompt) ||
+      /\b(enséñame|ensename|muéstrame|muestrame|dime)\b.*\b(qué|que)\b.*\bpuedes hacer\b/i.test(lowerPrompt);
+
+
+    if (helpCloseCommand) {
+
+      console.log(
+        '[MMM-TuAsistente] 🆘 Cerrando ayuda por voz...'
+      );
+
+      this.sendSocketNotification(
+        'HELP_HIDE'
+      );
+
+      const response =
+        'He cerrado la ayuda.';
+
+      this.speakText(response);
+
+      this.isThinking = false;
+
+      return;
+    }
+
+
+    if (helpCategoryMatch) {
+
+      const requestedCategory =
+        helpCategoryMatch[1]
+          .toLowerCase()
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "");
+
+
+      let category = null;
+
+      if (
+        requestedCategory === 'spotify' ||
+        requestedCategory === 'musica'
+      ) {
+        category = 'spotify';
+      }
+
+      else if (
+        requestedCategory === 'youtube'
+      ) {
+        category = 'youtube';
+      }
+
+      else if (
+        requestedCategory === 'volumen'
+      ) {
+        category = 'volume';
+      }
+
+      else if (
+        requestedCategory === 'modulos'
+      ) {
+        category = 'modules';
+      }
+
+      else if (
+        requestedCategory.startsWith('actualizacion')
+      ) {
+        category = 'updates';
+      }
+
+      else if (
+        requestedCategory === 'conversacion'
+      ) {
+        category = 'conversation';
+      }
+
+
+      if (category) {
+
+        console.log(
+          `[MMM-TuAsistente] 🆘 Abriendo ayuda: ${category}`
+        );
+
+        this.sendSocketNotification(
+          'HELP_CATEGORY',
+          {
+            category: category
+          }
+        );
+
+        const responses = {
+          spotify:
+            'Te muestro la ayuda de Spotify.',
+
+          youtube:
+            'Te muestro la ayuda de YouTube.',
+
+          volume:
+            'Te muestro los controles de volumen.',
+
+          modules:
+            'Te muestro los comandos de módulos.',
+
+          updates:
+            'Te muestro las opciones de actualización.',
+
+          conversation:
+            'Te muestro las opciones de conversación.'
+        };
+
+        this.speakText(
+          responses[category]
+        );
+
+        this.isThinking = false;
+
+        return;
+      }
+    }
+
+
+    if (helpOpenCommand) {
+
+      console.log(
+        '[MMM-TuAsistente] 🆘 Abriendo menú principal de ayuda por voz...'
+      );
+
+      this.sendSocketNotification(
+        'HELP_SHOW',
+        {
+          category: null
+        }
+      );
+
+      const response =
+        'Aquí tienes todo lo que puedo hacer. Puedes decir ayuda Spotify, ayuda YouTube o cerrar ayuda.';
+
+      this.speakText(response);
+
+      this.isThinking = false;
+
+      return;
+    }
+
+
     // =========================================================
     // ACTUALIZACIONES DE MÓDULOS POR VOZ
     // =========================================================

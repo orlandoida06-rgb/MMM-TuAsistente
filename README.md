@@ -314,3 +314,40 @@ También se mantiene disponible el comando:
 para salir manualmente del modo de ayuda.
 
 La ayuda está diseñada para poder ampliarse posteriormente con nuevas capacidades del asistente.
+
+
+## 🆘 Modo Ayuda por voz
+
+MMM-TuAsistente incorpora un modo de ayuda visual activado directamente mediante voz.
+
+### Activación
+
+Puedes decir:
+
+- **"Ayuda"**
+- **"Ayudas"**
+
+La orden **"Ayuda" se procesa directamente sin pasar por Ollama**, permitiendo abrir el menú de ayuda de forma inmediata.
+
+### Funciones mostradas
+
+La pantalla de ayuda organiza las capacidades del asistente en categorías:
+
+- 🎵 **Música / Spotify**
+- 📺 **YouTube**
+- 🔊 **Volumen**
+- 🧩 **Módulos**
+- 🔄 **Actualizaciones**
+- 💬 **Conversación**
+
+La pantalla muestra los principales comandos de voz disponibles para cada categoría.
+
+### Cierre de la ayuda
+
+La pantalla puede cerrarse mediante:
+
+- **"Cerrar ayuda"**
+
+Además, la ayuda dispone de un **cierre automático después de 10 segundos**, evitando que permanezca permanentemente sobre la interfaz principal.
+
+La función está diseñada para poder ampliarse posteriormente a medida que se incorporen nuevas capacidades al asistente.
