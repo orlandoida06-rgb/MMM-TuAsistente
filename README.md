@@ -82,6 +82,57 @@ El objetivo principal es crear un asistente integrado en MagicMirror capaz de co
 
 ---
 
+
+## 🔄 Actualización de módulos por voz
+
+MMM-TuAsistente incorpora un sistema de actualización de módulos de MagicMirror mediante comandos de voz.
+
+### Comprobar actualizaciones
+
+Puedes preguntar:
+
+- **"Hay actualizaciones"**
+- **"Busca actualizaciones"**
+- **"Comprueba las actualizaciones"**
+
+El asistente comprueba los repositorios Git de los módulos instalados y responde mediante voz si existen actualizaciones disponibles.
+
+Esta opción **solo comprueba**. No modifica ningún archivo ni reinicia MagicMirror.
+
+### Actualizar módulos
+
+Para actualizar todos los módulos compatibles:
+
+- **"Actualiza los módulos"**
+- **"Actualizar los módulos"**
+
+También puedes actualizar un módulo concreto:
+
+- **"Actualiza TuAsistente"**
+- **"Actualiza Spotify"**
+- **"Actualiza WeatherHero"**
+
+El sistema identifica automáticamente el repositorio correspondiente.
+
+### Protección de cambios locales
+
+Antes de actualizar un módulo se comprueba si contiene cambios locales.
+
+Si existen cambios locales, el módulo se omite para evitar sobrescribir modificaciones del usuario.
+
+En particular, archivos de configuración modificados localmente, como `config.js`, no se sobrescriben mediante este sistema.
+
+Los repositorios independientes instalados dentro de otros módulos tampoco bloquean las actualizaciones del módulo principal.
+
+### Actualización segura
+
+Las actualizaciones se realizan mediante Git utilizando `pull --ff-only`, evitando fusiones automáticas que puedan provocar conflictos.
+
+MagicMirror solo se reinicia cuando se ha realizado correctamente al menos una actualización.
+
+Los repositorios de prueba y copias de seguridad locales no se incluyen en el proceso de actualización.
+
+
 # 🖼️ Capturas del módulo
 
 ## 🏠 Interfaz principal
