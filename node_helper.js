@@ -159,6 +159,151 @@ module.exports = NodeHelper.create({
     this.isThinking = false;
   },
 
+  async updateModules(target = null) {
+    const modulesDir = path.join(__dirname, '..');
+    const updated = [];
+    const skipped = [];
+
+    const aliases = {
+      tuasistente: 'MMM-TuAsistente',
+      'tu asistente': 'MMM-TuAsistente',
+      spotify: 'MMM-TuAsistente-Spotify',
+      musica: 'MMM-TuAsistente-Spotify',
+      música: 'MMM-TuAsistente-Spotify',
+      weatherhero: 'MMM-WeatherHero',
+      'weather hero': 'MMM-WeatherHero'
+    };
+
+    const normalizedTarget =
+      target ? (aliases[target] || target) : null;
+
+    const entries = fs.readdirSync(modulesDir, {
+      withFileTypes: true
+    });
+
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+
+      if (
+        entry.name === 'MMM-TuAsistente-test' ||
+        entry.name.startsWith('MMM-TuAsistente_backup_')
+      ) {
+        continue;
+      }
+
+      const moduleName = entry.name;
+      const moduleDir = path.join(modulesDir, moduleName);
+
+      if (!fs.existsSync(path.join(moduleDir, '.git'))) {
+        continue;
+      }
+
+      if (
+        normalizedTarget &&
+        !moduleName.toLowerCase().includes(
+          normalizedTarget.toLowerCase()
+        ) &&
+        !normalizedTarget.toLowerCase().includes(
+          moduleName.toLowerCase()
+        )
+      ) {
+        continue;
+      }
+
+      const dirty = await new Promise(resolve => {
+        exec(
+          `git -C "${moduleDir}" status --porcelain`,
+          { timeout: 30000 },
+          (error, stdout) => {
+            if (error) {
+              resolve(true);
+              return;
+            }
+
+            resolve(Boolean(stdout.trim()));
+          }
+        );
+      });
+
+      if (dirty) {
+        skipped.push(moduleName);
+        continue;
+      }
+
+      const count = await new Promise(resolve => {
+        exec(
+          `git -C "${moduleDir}" fetch origin --quiet && git -C "${moduleDir}" rev-list --count HEAD..@{u}`,
+          { timeout: 30000 },
+          (error, stdout) => {
+            if (error) {
+              resolve(0);
+              return;
+            }
+
+            resolve(parseInt(stdout.trim(), 10) || 0);
+          }
+        );
+      });
+
+      if (!count) continue;
+
+      const pullResult = await new Promise(resolve => {
+        exec(
+          `git -C "${moduleDir}" pull --ff-only`,
+          { timeout: 120000 },
+          error => resolve(!error)
+        );
+      });
+
+      if (pullResult) {
+        updated.push(moduleName);
+      } else {
+        skipped.push(moduleName);
+      }
+    }
+
+    return {
+      updated,
+      skipped
+    };
+  },
+  async checkModuleUpdates() {
+    const modulesDir = path.join(__dirname, '..');
+    const updates = [];
+
+    const entries = fs.readdirSync(modulesDir, {
+      withFileTypes: true
+    });
+
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      if (entry.name === "MMM-TuAsistente-test" || entry.name.startsWith("MMM-TuAsistente_backup_")) continue;
+
+
+      const moduleDir = path.join(modulesDir, entry.name);
+      if (!fs.existsSync(path.join(moduleDir, '.git'))) continue;
+
+      const result = await new Promise(resolve => {
+        exec(
+          `git -C "${moduleDir}" fetch origin --quiet && git -C "${moduleDir}" rev-list --count HEAD..@{u}`,
+          { timeout: 30000 },
+          (error, stdout) => {
+            resolve({
+              name: entry.name,
+              count: error ? 0 : parseInt(stdout.trim(), 10) || 0
+            });
+          }
+        );
+      });
+
+      if (result.count > 0) {
+        updates.push(result);
+      }
+    }
+
+    return { updates };
+  },
+
   // ==========================================
   // OPCI�N 1: PTT / ESCUCHA POR TECLA O BOT�N
   // ==========================================
@@ -1026,11 +1171,157 @@ async buscarYouTube(query) {
     // ==========================================
     // ==========================================
     // ==========================================
+    // =========================================================
+    // ACTUALIZACIONES DE MÓDULOS POR VOZ
+    // =========================================================
+
+    const updateCheckCommand =
+      /\b(hay|existen|tengo|tienen)\b.*\b(actualizaciones?|actualizar)\b/i.test(lowerPrompt) ||
+      /\b(busca|buscar|comprueba|comprobar|revisa|revisar)\b.*\b(actualizaciones?|actualizar)\b/i.test(lowerPrompt);
+
+    const updateRunCommand =
+      /\b(actualiza|actualizar|actualízalos|actualizalos)\b/i.test(lowerPrompt);
+
+    if (updateCheckCommand && !updateRunCommand) {
+      console.log(
+        '[MMM-TuAsistente] 🔎 Comprobando actualizaciones por voz...'
+      );
+
+      const result = await this.checkModuleUpdates();
+
+      let response;
+
+      if (result.error) {
+        response = 'No he podido comprobar las actualizaciones.';
+      } else if (!result.updates.length) {
+        response = 'No hay actualizaciones disponibles.';
+      } else if (result.updates.length === 1) {
+        response =
+          `Hay una actualización disponible para ${result.updates[0].name}.`;
+      } else {
+        response =
+          `Hay actualizaciones disponibles para ${result.updates
+            .map(item => item.name)
+            .join(', ')}.`;
+      }
+
+      console.log(
+        `[MMM-TuAsistente] Actualizaciones: ${response}`
+      );
+
+      this.speakText(response);
+      this.sendSocketNotification(
+        'ASSISTANT_RESPONSE',
+        response
+      );
+
+      this.isThinking = false;
+      return;
+    }
+
+      // =========================================================
+      // EJECUTAR ACTUALIZACIONES DE MÓDULOS POR VOZ
+      // =========================================================
+
+      if (updateRunCommand) {
+        console.log(
+          '[MMM-TuAsistente] 🔄 Ejecutando actualización de módulos por voz...'
+        );
+
+        let target = null;
+
+        if (
+          /\bspotify\b/i.test(lowerPrompt) ||
+          /\bmúsica\b/i.test(lowerPrompt) ||
+          /\bmusica\b/i.test(lowerPrompt)
+        ) {
+          target = 'spotify';
+        } else if (
+          /\bweather\s*hero\b/i.test(lowerPrompt) ||
+          /\bweatherhero\b/i.test(lowerPrompt)
+        ) {
+          target = 'weatherhero';
+        } else if (
+          /\btu\s*asistente\b/i.test(lowerPrompt) ||
+          /\btuasistente\b/i.test(lowerPrompt)
+        ) {
+          target = 'tuasistente';
+        }
+
+        const result = await this.updateModules(target);
+
+        let response;
+
+        if (result.updated.length) {
+          response =
+            result.updated.length === 1
+              ? `He actualizado ${result.updated[0]}.`
+              : `He actualizado ${result.updated.length} módulos.`;
+
+          if (result.skipped.length) {
+            response +=
+              ` No he podido actualizar ${result.skipped.join(', ')} porque tienen cambios locales.`;
+          }
+
+          console.log(
+            `[MMM-TuAsistente] ${response}`
+          );
+
+          this.speakText(response);
+          this.sendSocketNotification(
+            'ASSISTANT_RESPONSE',
+            response
+          );
+
+          setTimeout(() => {
+            exec(
+              'pm2 restart mm',
+              { timeout: 30000 },
+              error => {
+                if (error) {
+                  console.error(
+                    '[MMM-TuAsistente] Error reiniciando MagicMirror:',
+                    error.message
+                  );
+                }
+              }
+            );
+          }, 7000);
+        } else if (result.skipped.length) {
+          response =
+            `No he actualizado ningún módulo porque tienen cambios locales: ${result.skipped.join(', ')}.`;
+
+          console.log(
+            `[MMM-TuAsistente] ${response}`
+          );
+
+          this.speakText(response);
+          this.sendSocketNotification(
+            'ASSISTANT_RESPONSE',
+            response
+          );
+        } else {
+          response = 'Todos los módulos están actualizados.';
+
+          console.log(
+            `[MMM-TuAsistente] ${response}`
+          );
+
+          this.speakText(response);
+          this.sendSocketNotification(
+            'ASSISTANT_RESPONSE',
+            response
+          );
+        }
+
+        this.isThinking = false;
+        return;
+      }
+
     // CONTROL DE MÓDULOS POR VOZ
     // ==========================================
 
     let visibilityAction = null;
-    console.log(`[MMM-TuAsistente] DEBUG lowerPrompt: "${lowerPrompt}"`);
     let visibilityTarget = "all";
     let visibilityResponse = null;
 
