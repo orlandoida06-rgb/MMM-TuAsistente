@@ -351,3 +351,9 @@ La pantalla puede cerrarse mediante:
 Además, la ayuda dispone de un **cierre automático después de 10 segundos**, evitando que permanezca permanentemente sobre la interfaz principal.
 
 La función está diseñada para poder ampliarse posteriormente a medida que se incorporen nuevas capacidades al asistente.
+
+## 🆘 Ayuda
+
+<p align="center">
+<img src="./images/ayuda.png" alt="Modo Ayuda de MMM-TuAsistente" width="900">
+</p>
