@@ -48,7 +48,7 @@ Puedes seleccionar la configuración automática de MagicMirror. Se realiza copi
 
 ### Reiniciar
 
-```bash
+
 pm2 restart mm
 ```
 
@@ -74,7 +74,7 @@ pm2 restart mm
 
 ## 👤 Sobre el proyecto
 
-**MMM-TuAsistente** ha sido desarrollado originalmente para **uso personal**, como un asistente de voz local integrado en MagicMirror².
+**MMM-TuAsistente** ha sido desarrollado originalmente para **uso personal**, como un asistente de voz local integrado
 
 El proyecto se ha desarrollado y probado en una **Orange Pi 5 Plus**, utilizando sus recursos locales para el procesamiento de voz, síntesis de voz, inteligencia artificial y reproducción multimedia.
 
@@ -129,8 +129,6 @@ Los repositorios independientes instalados dentro de otros módulos tampoco bloq
 Las actualizaciones se realizan mediante Git utilizando `pull --ff-only`, evitando fusiones automáticas que puedan provocar conflictos.
 
 MagicMirror solo se reinicia cuando se ha realizado correctamente al menos una actualización.
-
-Los repositorios de prueba y copias de seguridad locales no se incluyen en el proceso de actualización.
 
 
 # 🖼️ Capturas del módulo
