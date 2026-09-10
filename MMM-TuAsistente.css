@@ -786,3 +786,735 @@
 
 
 /* ============================================================
+
+
+/* ==========================================================
+   PANTALLA DE AYUDA
+   ========================================================== */
+
+.tu-asistente-help {
+  width: min(900px, 92vw);
+  margin: 20px auto 0;
+
+  padding: 30px 34px 26px;
+
+  box-sizing: border-box;
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(20, 20, 24, 0.94),
+      rgba(5, 5, 8, 0.96)
+    );
+
+  border: 1px solid rgba(255, 255, 255, 0.16);
+
+  border-radius: 28px;
+
+  box-shadow:
+    0 20px 70px rgba(0, 0, 0, 0.65),
+    0 0 45px rgba(10, 132, 255, 0.08);
+
+  backdrop-filter: blur(20px);
+
+  animation:
+    helpFadeIn
+    0.55s
+    cubic-bezier(0.16, 1, 0.3, 1)
+    forwards;
+}
+
+
+/* ==========================================================
+   TÍTULO
+   ========================================================== */
+
+.tu-asistente-help-title {
+  font-size: 34px;
+
+  font-weight: 600;
+
+  letter-spacing: 2px;
+
+  text-align: center;
+
+  color: #ffffff;
+
+  margin-bottom: 8px;
+
+  text-shadow:
+    0 0 20px rgba(255, 255, 255, 0.18);
+}
+
+
+/* ==========================================================
+   SUBTÍTULO
+   ========================================================== */
+
+.tu-asistente-help-subtitle {
+  font-size: 17px;
+
+  font-weight: 300;
+
+  color: rgba(255, 255, 255, 0.65);
+
+  text-align: center;
+
+  margin-bottom: 28px;
+}
+
+
+/* ==========================================================
+   GRID
+   ========================================================== */
+
+.tu-asistente-help-grid {
+  display: grid;
+
+  grid-template-columns:
+    repeat(3, minmax(0, 1fr));
+
+  gap: 16px;
+}
+
+
+/* ==========================================================
+   TARJETAS
+   ========================================================== */
+
+.tu-asistente-help-card {
+  min-height: 150px;
+
+  padding: 20px 16px;
+
+  box-sizing: border-box;
+
+  display: flex;
+
+  flex-direction: column;
+
+  align-items: center;
+
+  justify-content: center;
+
+  text-align: center;
+
+  background:
+    rgba(255, 255, 255, 0.045);
+
+  border:
+    1px solid rgba(255, 255, 255, 0.11);
+
+  border-radius: 20px;
+
+  transition:
+    transform 0.25s ease,
+    background 0.25s ease,
+    border-color 0.25s ease,
+    box-shadow 0.25s ease;
+
+  animation:
+    helpCardIn
+    0.5s
+    cubic-bezier(0.16, 1, 0.3, 1)
+    both;
+}
+
+
+/* ==========================================================
+   EFECTO TARJETA
+   ========================================================== */
+
+.tu-asistente-help-card:hover {
+  transform:
+    translateY(-5px)
+    scale(1.015);
+
+  background:
+    rgba(255, 255, 255, 0.08);
+
+  border-color:
+    rgba(255, 255, 255, 0.25);
+
+  box-shadow:
+    0 12px 35px rgba(0, 0, 0, 0.4),
+    0 0 25px rgba(10, 132, 255, 0.08);
+}
+
+
+/* ==========================================================
+   ICONO
+   ========================================================== */
+
+.tu-asistente-help-card-icon {
+  font-size: 38px;
+
+  line-height: 1;
+
+  margin-bottom: 12px;
+
+  filter:
+    drop-shadow(
+      0 0 8px
+      rgba(255, 255, 255, 0.15)
+    );
+
+  transition:
+    transform 0.25s ease;
+}
+
+
+.tu-asistente-help-card:hover
+.tu-asistente-help-card-icon {
+  transform:
+    scale(1.12);
+}
+
+
+/* ==========================================================
+   TÍTULO TARJETA
+   ========================================================== */
+
+.tu-asistente-help-card-title {
+  font-size: 18px;
+
+  font-weight: 500;
+
+  letter-spacing: 1px;
+
+  color: #ffffff;
+
+  margin-bottom: 7px;
+}
+
+
+/* ==========================================================
+   TEXTO TARJETA
+   ========================================================== */
+
+.tu-asistente-help-card-text {
+  font-size: 14px;
+
+  line-height: 1.35;
+
+  font-weight: 300;
+
+  color:
+    rgba(255, 255, 255, 0.58);
+
+  max-width: 210px;
+}
+
+
+/* ==========================================================
+   PIE DE AYUDA
+   ========================================================== */
+
+.tu-asistente-help-footer {
+  margin-top: 24px;
+
+  padding-top: 18px;
+
+  border-top:
+    1px solid
+    rgba(255, 255, 255, 0.10);
+
+  font-size: 15px;
+
+  color:
+    rgba(255, 255, 255, 0.55);
+
+  text-align: center;
+
+  letter-spacing: 0.3px;
+}
+
+
+/* ==========================================================
+   ANIMACIONES AYUDA
+   ========================================================== */
+
+@keyframes helpFadeIn {
+
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+
+}
+
+
+@keyframes helpCardIn {
+
+  from {
+    opacity: 0;
+    transform: translateY(15px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+}
+
+
+/* ==========================================================
+   ENTRADA ESCALONADA DE TARJETAS
+   ========================================================== */
+
+.tu-asistente-help-card:nth-child(1) {
+  animation-delay: 0.05s;
+}
+
+.tu-asistente-help-card:nth-child(2) {
+  animation-delay: 0.10s;
+}
+
+.tu-asistente-help-card:nth-child(3) {
+  animation-delay: 0.15s;
+}
+
+.tu-asistente-help-card:nth-child(4) {
+  animation-delay: 0.20s;
+}
+
+.tu-asistente-help-card:nth-child(5) {
+  animation-delay: 0.25s;
+}
+
+.tu-asistente-help-card:nth-child(6) {
+  animation-delay: 0.30s;
+}
+
+
+/* ==========================================================
+   PANTALLAS PEQUEÑAS
+   ========================================================== */
+
+@media (max-width: 700px) {
+
+  .tu-asistente-help {
+    width: 94vw;
+
+    padding:
+      24px 18px 20px;
+  }
+
+
+  .tu-asistente-help-title {
+    font-size: 27px;
+  }
+
+
+  .tu-asistente-help-subtitle {
+    font-size: 15px;
+  }
+
+
+  .tu-asistente-help-grid {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr));
+
+    gap: 10px;
+  }
+
+
+  .tu-asistente-help-card {
+    min-height: 135px;
+
+    padding: 15px 10px;
+  }
+
+
+  .tu-asistente-help-card-icon {
+    font-size: 32px;
+  }
+
+
+  .tu-asistente-help-card-title {
+    font-size: 15px;
+  }
+
+
+  .tu-asistente-help-card-text {
+    font-size: 12px;
+  }
+
+}
+
+
+/* ==========================================================
+   PANTALLAS MUY PEQUEÑAS
+   ========================================================== */
+
+@media (max-width: 430px) {
+
+  .tu-asistente-help-grid {
+    grid-template-columns:
+      1fr;
+  }
+
+}
+
+
+/* ==========================================================
+   CUADRO DE BÚSQUEDA POR ENCIMA DE LA AYUDA
+   ========================================================== */
+
+.tu-asistente-help {
+  position: relative;
+  z-index: 1;
+}
+
+/* La interfaz de búsqueda siempre queda delante */
+.assistant-image-container,
+.tu-asistente-search,
+.tu-asistente-search-container,
+.search-container {
+  position: relative;
+  z-index: 1000;
+}
+
+
+/* ==========================================================
+   ELEMENTOS DEL ASISTENTE POR ENCIMA DE LA AYUDA
+   ========================================================== */
+
+.tu-asistente-help {
+  position: relative;
+  z-index: 1;
+}
+
+.user-query,
+.assistant-response {
+  position: relative;
+  z-index: 1000;
+}
+
+
+
+/* ==========================================================
+   AYUDA - LISTA POR CATEGORÍAS
+   ========================================================== */
+
+.tu-asistente-help-list {
+  display: grid;
+
+  grid-template-columns:
+    repeat(2, minmax(0, 1fr));
+
+  gap: 16px;
+
+  width: 100%;
+}
+
+
+/* ==========================================================
+   SECCIÓN
+   ========================================================== */
+
+.tu-asistente-help-section {
+  padding: 18px 20px;
+
+  background:
+    rgba(255, 255, 255, 0.045);
+
+  border:
+    1px solid rgba(255, 255, 255, 0.11);
+
+  border-radius: 18px;
+
+  box-sizing: border-box;
+
+  transition:
+    background 0.25s ease,
+    border-color 0.25s ease,
+    transform 0.25s ease;
+
+  animation:
+    helpCardIn
+    0.5s
+    cubic-bezier(0.16, 1, 0.3, 1)
+    both;
+}
+
+
+.tu-asistente-help-section:hover {
+  background:
+    rgba(255, 255, 255, 0.075);
+
+  border-color:
+    rgba(255, 255, 255, 0.20);
+
+  transform:
+    translateY(-2px);
+}
+
+
+/* ==========================================================
+   CABECERA DE CATEGORÍA
+   ========================================================== */
+
+.tu-asistente-help-section-header {
+  display: flex;
+
+  align-items: center;
+
+  gap: 10px;
+
+  margin-bottom: 13px;
+
+  padding-bottom: 10px;
+
+  border-bottom:
+    1px solid
+    rgba(255, 255, 255, 0.08);
+}
+
+
+.tu-asistente-help-section-icon {
+  font-size: 27px;
+
+  line-height: 1;
+}
+
+
+.tu-asistente-help-section-title {
+  font-size: 17px;
+
+  font-weight: 600;
+
+  letter-spacing: 0.7px;
+
+  color: #ffffff;
+}
+
+
+/* ==========================================================
+   LISTA DE COMANDOS
+   ========================================================== */
+
+.tu-asistente-help-command-list {
+  display: flex;
+
+  flex-direction: column;
+
+  gap: 7px;
+}
+
+
+.tu-asistente-help-command {
+  display: flex;
+
+  align-items: flex-start;
+
+  gap: 9px;
+
+  font-size: 14px;
+
+  line-height: 1.35;
+
+  color:
+    rgba(255, 255, 255, 0.70);
+}
+
+
+.tu-asistente-help-command-bullet {
+  flex-shrink: 0;
+
+  color:
+    rgba(255, 255, 255, 0.38);
+
+  font-size: 17px;
+
+  line-height: 1.1;
+}
+
+
+.tu-asistente-help-command-text {
+  flex: 1;
+}
+
+
+/* ==========================================================
+   ANIMACIÓN ESCALONADA
+   ========================================================== */
+
+.tu-asistente-help-section:nth-child(1) {
+  animation-delay: 0.05s;
+}
+
+.tu-asistente-help-section:nth-child(2) {
+  animation-delay: 0.10s;
+}
+
+.tu-asistente-help-section:nth-child(3) {
+  animation-delay: 0.15s;
+}
+
+.tu-asistente-help-section:nth-child(4) {
+  animation-delay: 0.20s;
+}
+
+.tu-asistente-help-section:nth-child(5) {
+  animation-delay: 0.25s;
+}
+
+.tu-asistente-help-section:nth-child(6) {
+  animation-delay: 0.30s;
+}
+
+
+/* ==========================================================
+   MÓVIL
+   ========================================================== */
+
+@media (max-width: 700px) {
+
+  .tu-asistente-help-list {
+    grid-template-columns:
+      1fr;
+
+    gap: 10px;
+  }
+
+
+  .tu-asistente-help-section {
+    padding: 15px 16px;
+  }
+
+
+  .tu-asistente-help-section-title {
+    font-size: 15px;
+  }
+
+
+  .tu-asistente-help-command {
+    font-size: 13px;
+  }
+
+}
+
+
+
+/* ==========================================================
+   AYUDA - ORDEN REAL DEL DOM
+   La consulta se construye antes del panel.
+   ========================================================== */
+
+.asistente-container.help .user-query {
+  position: relative;
+  z-index: 10;
+
+  order: initial;
+
+  width: 100%;
+  box-sizing: border-box;
+
+  margin-top: 0;
+  margin-bottom: 15px;
+}
+
+.asistente-container.help .tu-asistente-help {
+  position: relative;
+  z-index: 1;
+}
+
+
+/* ==========================================================
+   HELP — mantener la posición normal de la consulta
+   La imagen permanece ocupando su espacio pero invisible.
+   ========================================================== */
+
+.asistente-container.help .icon-container {
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+.asistente-container.help .user-query {
+  position: relative !important;
+  margin-top: 18px !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+  text-align: center !important;
+  z-index: 10000 !important;
+}
+
+.asistente-container.help .tu-asistente-help {
+  position: relative;
+  z-index: 1;
+}
+
+/* ==========================================================
+   PRUEBA — CONSULTA DE VOZ EN ESQUINA INFERIOR DERECHA
+   ========================================================== */
+
+.asistente-container.help .user-query {
+  position: fixed !important;
+
+  right: 30px !important;
+  bottom: 30px !important;
+
+  width: auto !important;
+  max-width: 420px !important;
+
+  margin: 0 !important;
+
+  text-align: right !important;
+
+  z-index: 2147483646 !important;
+}
+
+/* ============================================================
+   AYUDA — CONSULTA FIJA ABAJO A LA DERECHA
+   ============================================================ */
+
+.asistente-container.help .user-query {
+  position: fixed !important;
+  right: 30px !important;
+  bottom: 30px !important;
+
+  width: auto !important;
+  max-width: 420px !important;
+
+  margin: 0 !important;
+  padding: 8px 14px !important;
+
+  text-align: right !important;
+
+  z-index: 2147483646 !important;
+}
+
+/* ============================================================
+   CONSULTA DE VOZ EN MODO AYUDA
+   ============================================================ */
+
+.asistente-container.help .user-query-help {
+  position: fixed !important;
+
+  right: 30px !important;
+  bottom: 30px !important;
+  left: auto !important;
+  top: auto !important;
+
+  width: auto !important;
+  max-width: 420px !important;
+
+  margin: 0 !important;
+  padding: 10px 16px !important;
+
+  box-sizing: border-box !important;
+
+  text-align: right !important;
+
+  z-index: 2147483647 !important;
+
+  pointer-events: none !important;
+}

@@ -245,3 +245,72 @@ La arquitectura de control de visibilidad permite ampliar el sistema posteriorme
 - **Modo noche** — pantalla prácticamente limpia.
 
 Estos perfiles podrán activarse también mediante comandos de voz.
+
+
+## 🆘 Modo Ayuda por voz
+
+MMM-TuAsistente incorpora un modo de ayuda visual activado directamente mediante voz.
+
+Puedes decir:
+
+- **"Ayuda"**
+- **"Ayudas"**
+
+La orden de ayuda se procesa directamente, sin necesidad de consultar al modelo Ollama.
+
+### Pantalla de ayuda
+
+Al activar la ayuda, MagicMirror muestra una pantalla organizada por categorías con las principales funciones disponibles:
+
+- 🎵 **Música / Spotify**
+  - Reproducir música
+  - Buscar canciones, artistas y álbumes
+  - Pausar y continuar
+  - Siguiente y anterior
+  - Activar Spotify
+
+- 📺 **YouTube**
+  - Buscar vídeos
+  - Reproducir y pausar
+  - Continuar reproducción
+  - Pantalla completa
+  - Cerrar YouTube
+
+- 🔊 **Volumen**
+  - Subir y bajar volumen
+  - Establecer un porcentaje
+  - Silenciar y quitar silencio
+  - Consultar el volumen actual
+
+- 🧩 **Módulos**
+  - Ocultar y mostrar módulos
+  - Controlar varios módulos
+  - Ocultar todo excepto módulos determinados
+  - Mantener TuAsistente disponible
+
+- 🔄 **Actualizaciones**
+  - Comprobar actualizaciones
+  - Buscar actualizaciones
+  - Actualizar módulos
+  - Actualizar Spotify
+  - Actualizar WeatherHero
+  - Actualizar TuAsistente
+
+- 💬 **Conversación**
+  - Preguntas
+  - Explicaciones
+  - Búsqueda de información
+  - Ideas
+  - Conversación libre
+
+### Cierre automático
+
+La pantalla de ayuda permanece visible durante **10 segundos** y después vuelve automáticamente al funcionamiento normal del asistente.
+
+También se mantiene disponible el comando:
+
+- **"Cerrar ayuda"**
+
+para salir manualmente del modo de ayuda.
+
+La ayuda está diseñada para poder ampliarse posteriormente con nuevas capacidades del asistente.

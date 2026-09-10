@@ -25,6 +25,8 @@ Module.register("MMM-TuAsistente", {
     this.assistantResponse = "";
 
     this.currentState = "hidden";
+    this.helpVisible = false;
+    this.helpCategory = null;
 
     // --------------------------------------------------------
     // IMAGEN
@@ -219,6 +221,12 @@ Module.register("MMM-TuAsistente", {
         payload.includes("Grabando")
       ) {
 
+        if (this.helpVisible) {
+          // La ayuda permanece completamente estable mientras se pulsa PTT.
+          // No reconstruimos el DOM para evitar parpadeos.
+          return;
+        }
+
         if (this.hideTimer) {
 
           clearTimeout(this.hideTimer);
@@ -257,6 +265,11 @@ Module.register("MMM-TuAsistente", {
         payload.includes("Pensando")
       ) {
 
+        if (this.helpVisible) {
+          // La ayuda permanece completamente estable.
+          return;
+        }
+
         this.currentState = "thinking";
 
         this.updateDom(200);
@@ -271,6 +284,12 @@ Module.register("MMM-TuAsistente", {
         payload === "CANCELLED" ||
         payload === "ERROR"
       ) {
+
+        if (this.helpVisible) {
+          this.currentState = "help";
+          this.updateDom(100);
+          return;
+        }
 
         if (this.hideTimer) {
 
@@ -301,6 +320,107 @@ Module.register("MMM-TuAsistente", {
 
         this.updateDom(200);
       }
+    }
+
+
+    // ========================================================
+    // AYUDA
+    // ========================================================
+
+    else if (notification === "HELP_SHOW") {
+
+      this.helpVisible = true;
+
+      this.helpCategory =
+        payload && payload.category
+          ? payload.category
+          : null;
+
+      this.currentState = "help";
+
+      // La ayuda permanece abierta.
+      if (this.hideTimer) {
+        clearTimeout(this.hideTimer);
+        this.hideTimer = null;
+      }
+
+      if (this.imageTimer) {
+        clearTimeout(this.imageTimer);
+        this.imageTimer = null;
+      }
+
+      this.imageUrl = null;
+      this.imageQuery = "";
+
+      this.updateDom(250);
+
+      // ======================================================
+      // CERRAR AYUDA AUTOMÁTICAMENTE A LOS 10 SEGUNDOS
+      // ======================================================
+
+      if (this.helpTimer) {
+        clearTimeout(this.helpTimer);
+      }
+
+      this.helpTimer = setTimeout(() => {
+
+        this.helpTimer = null;
+
+        this.helpVisible = false;
+        this.helpCategory = null;
+        this.currentState = "hidden";
+
+        this.userQuery = "";
+        this.assistantResponse = "";
+
+        this.updateDom(300);
+
+      }, 10000);
+
+      return;
+    }
+
+
+    else if (notification === "HELP_CATEGORY") {
+
+      this.helpVisible = true;
+
+      this.helpCategory =
+        payload && payload.category
+          ? payload.category
+          : null;
+
+      this.currentState = "help";
+
+      if (this.hideTimer) {
+        clearTimeout(this.hideTimer);
+        this.hideTimer = null;
+      }
+
+      this.updateDom(250);
+
+      return;
+    }
+
+
+    else if (notification === "HELP_HIDE") {
+
+      this.helpVisible = false;
+      this.helpCategory = null;
+
+      if (this.hideTimer) {
+        clearTimeout(this.hideTimer);
+        this.hideTimer = null;
+      }
+
+      this.currentState = "hidden";
+
+      this.userQuery = "";
+      this.assistantResponse = "";
+
+      this.updateDom(300);
+
+      return;
     }
 
 
@@ -412,6 +532,26 @@ Module.register("MMM-TuAsistente", {
 
   this.assistantResponse =
     payload || "";
+
+  // ======================================================
+  // MODO AYUDA
+  // ======================================================
+  // Mientras la ayuda esté abierta:
+  // - No cambiar a "speaking"
+  // - No iniciar hideTimer
+  // - No ocultar la ayuda
+  // - Mantener visible la consulta del usuario
+  // ======================================================
+
+  if (this.helpVisible) {
+
+    this.currentState = "help";
+
+    this.updateDom(200);
+
+    return;
+  }
+
 
   // ======================================================
   // SI ES UNA ORDEN DE VOLUMEN
@@ -1065,6 +1205,289 @@ Module.register("MMM-TuAsistente", {
 
 
     // ========================================================
+    // AYUDA
+    // ========================================================
+
+    if (this.currentState === "help") {
+
+      const helpContainer =
+        document.createElement("div");
+
+      helpContainer.className =
+        "tu-asistente-help";
+
+
+      const title =
+        document.createElement("div");
+
+      title.className =
+        "tu-asistente-help-title";
+
+      title.textContent =
+        "¿QUÉ PUEDO HACER POR TI?";
+
+      helpContainer.appendChild(title);
+
+
+      const subtitle =
+        document.createElement("div");
+
+      subtitle.className =
+        "tu-asistente-help-subtitle";
+
+      subtitle.textContent =
+        "Estas son las funciones que puedes controlar por voz";
+
+      helpContainer.appendChild(subtitle);
+
+
+      // ======================================================
+      // CATEGORÍAS Y COMANDOS
+      // ======================================================
+
+      const sections = [
+
+        {
+          icon: "🎵",
+          title: "MÚSICA / SPOTIFY",
+          commands: [
+            "Reproduce una canción o artista",
+            "Busca una canción, artista o álbum",
+            "Pausa la música",
+            "Continúa la reproducción",
+            "Siguiente canción",
+            "Canción anterior",
+            "Activa Spotify"
+          ]
+        },
+
+        {
+          icon: "📺",
+          title: "YOUTUBE",
+          commands: [
+            "Busca un vídeo",
+            "Reproduce un vídeo",
+            "Pausa el vídeo",
+            "Continúa la reproducción",
+            "Pon el vídeo a pantalla completa",
+            "Cierra YouTube"
+          ]
+        },
+
+        {
+          icon: "🔊",
+          title: "VOLUMEN",
+          commands: [
+            "Sube el volumen",
+            "Baja el volumen",
+            "Pon el volumen al 50%",
+            "Silencia el sonido",
+            "Quita el silencio",
+            "Dime el volumen actual"
+          ]
+        },
+
+        {
+          icon: "🧩",
+          title: "MÓDULOS",
+          commands: [
+            "Oculta un módulo",
+            "Muestra un módulo",
+            "Oculta varios módulos",
+            "Muestra varios módulos",
+            "Oculta todo menos el reloj",
+            "Deja visibles solo los módulos indicados"
+          ]
+        },
+
+        {
+          icon: "🔄",
+          title: "ACTUALIZACIONES",
+          commands: [
+            "Comprueba si hay actualizaciones",
+            "Busca actualizaciones",
+            "Actualiza los módulos",
+            "Actualiza Spotify",
+            "Actualiza WeatherHero",
+            "Actualiza TuAsistente"
+          ]
+        },
+
+        {
+          icon: "💬",
+          title: "CONVERSACIÓN",
+          commands: [
+            "Hazme una pregunta",
+            "Explícame un concepto",
+            "Ayúdame con algo",
+            "Busca información",
+            "Dame una idea",
+            "Habla conmigo"
+          ]
+        }
+
+      ];
+
+
+      const grid =
+        document.createElement("div");
+
+      grid.className =
+        "tu-asistente-help-list";
+
+
+      sections.forEach(section => {
+
+        const sectionEl =
+          document.createElement("div");
+
+        sectionEl.className =
+          "tu-asistente-help-section";
+
+
+        const sectionHeader =
+          document.createElement("div");
+
+        sectionHeader.className =
+          "tu-asistente-help-section-header";
+
+
+        const icon =
+          document.createElement("span");
+
+        icon.className =
+          "tu-asistente-help-section-icon";
+
+        icon.textContent =
+          section.icon;
+
+
+        const sectionTitle =
+          document.createElement("span");
+
+        sectionTitle.className =
+          "tu-asistente-help-section-title";
+
+        sectionTitle.textContent =
+          section.title;
+
+
+        sectionHeader.appendChild(icon);
+        sectionHeader.appendChild(sectionTitle);
+
+        sectionEl.appendChild(sectionHeader);
+
+
+        const commandList =
+          document.createElement("div");
+
+        commandList.className =
+          "tu-asistente-help-command-list";
+
+
+        section.commands.forEach(command => {
+
+          const commandEl =
+            document.createElement("div");
+
+          commandEl.className =
+            "tu-asistente-help-command";
+
+
+          const bullet =
+            document.createElement("span");
+
+          bullet.className =
+            "tu-asistente-help-command-bullet";
+
+          bullet.textContent =
+            "•";
+
+
+          const commandText =
+            document.createElement("span");
+
+          commandText.className =
+            "tu-asistente-help-command-text";
+
+          commandText.textContent =
+            command;
+
+
+          commandEl.appendChild(bullet);
+          commandEl.appendChild(commandText);
+
+          commandList.appendChild(commandEl);
+
+        });
+
+
+        sectionEl.appendChild(commandList);
+
+        grid.appendChild(sectionEl);
+
+      });
+
+
+      helpContainer.appendChild(grid);
+
+
+      // ======================================================
+      // PIE
+      // ======================================================
+
+      const footer =
+        document.createElement("div");
+
+      footer.className =
+        "tu-asistente-help-footer";
+
+      footer.textContent =
+        'Di "cerrar ayuda" para volver al funcionamiento normal';
+
+
+      helpContainer.appendChild(footer);
+
+
+      // ======================================================
+      // CONSULTA DE VOZ SOBRE LA AYUDA
+      // ======================================================
+
+      if (this.userQuery) {
+
+        const queryEl =
+          document.createElement("div");
+
+        queryEl.className =
+          this.currentState === "help"
+            ? "user-query user-query-help"
+            : "user-query";
+
+        queryEl.textContent =
+          `"${this.userQuery}"`;
+
+        wrapper.appendChild(
+          queryEl
+        );
+      }
+
+
+      // ======================================================
+      // AYUDA DEBAJO DE LA CONSULTA
+      // ======================================================
+
+      wrapper.appendChild(
+        helpContainer
+      );
+
+      // La ayuda NO debe alterar la posición normal
+      // de la consulta del usuario.
+      // Continuamos construyendo el DOM normal.
+
+    }
+
+
+    // ========================================================
     // IMAGEN DE BÚSQUEDA
     // ========================================================
 
@@ -1254,7 +1677,10 @@ Module.register("MMM-TuAsistente", {
     // CONSULTA DEL USUARIO
     // ========================================================
 
-    if (this.userQuery) {
+    if (
+      this.userQuery &&
+      this.currentState !== "help"
+    ) {
 
       const queryEl =
         document.createElement("div");
