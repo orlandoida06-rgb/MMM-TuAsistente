@@ -212,7 +212,7 @@ module.exports = NodeHelper.create({
 
       const dirty = await new Promise(resolve => {
         exec(
-          `git -C "${moduleDir}" status --porcelain`,
+          `git -C "${moduleDir}" status --porcelain --untracked-files=no`,
           { timeout: 30000 },
           (error, stdout) => {
             if (error) {
