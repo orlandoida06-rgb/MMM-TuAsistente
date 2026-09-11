@@ -5,6 +5,7 @@ const { Ollama } = require('ollama');
 const { spawn, exec } = require('child_process');
 const fs = require('fs');
 const path = require('path');
+const moduleCatalog = require('./module_catalog');
 
 module.exports = NodeHelper.create({
   systemPrompt:
@@ -164,51 +165,44 @@ module.exports = NodeHelper.create({
     const updated = [];
     const skipped = [];
 
-    const aliases = {
-      tuasistente: 'MMM-TuAsistente',
-      'tu asistente': 'MMM-TuAsistente',
-      spotify: 'MMM-TuAsistente-Spotify',
-      musica: 'MMM-TuAsistente-Spotify',
-      música: 'MMM-TuAsistente-Spotify',
-      weatherhero: 'MMM-WeatherHero',
-      'weather hero': 'MMM-WeatherHero'
-    };
+    // ==========================================================
+    // CATÁLOGO AUTOMÁTICO DE MÓDULOS
+    // ==========================================================
 
-    const normalizedTarget =
-      target ? (aliases[target] || target) : null;
+    const modules = moduleCatalog.getModules(modulesDir);
 
-    const entries = fs.readdirSync(modulesDir, {
-      withFileTypes: true
-    });
+    let targetModule = null;
 
-    for (const entry of entries) {
-      if (!entry.isDirectory()) continue;
+    if (target) {
+      targetModule = moduleCatalog.findModule(
+        target,
+        modulesDir
+      );
 
+      if (targetModule) {
+        console.log(
+          `[MMM-TuAsistente] 🔎 Alias "${target}" → ${targetModule.name}`
+        );
+      } else {
+        console.log(
+          `[MMM-TuAsistente] 🔎 No se encontró el módulo "${target}".`
+        );
+      }
+    }
+
+    for (const module of modules) {
       if (
-        entry.name === 'MMM-TuAsistente-test' ||
-        entry.name.startsWith('MMM-TuAsistente_backup_')
+        target &&
+        (!targetModule || module.name !== targetModule.name)
       ) {
         continue;
       }
 
-      const moduleName = entry.name;
-      const moduleDir = path.join(modulesDir, moduleName);
+      const moduleDir = module.path;
 
-      if (!fs.existsSync(path.join(moduleDir, '.git'))) {
-        continue;
-      }
-
-      if (
-        normalizedTarget &&
-        !moduleName.toLowerCase().includes(
-          normalizedTarget.toLowerCase()
-        ) &&
-        !normalizedTarget.toLowerCase().includes(
-          moduleName.toLowerCase()
-        )
-      ) {
-        continue;
-      }
+      // ========================================================
+      // COMPROBAR CAMBIOS LOCALES
+      // ========================================================
 
       const dirty = await new Promise(resolve => {
         exec(
@@ -226,13 +220,22 @@ module.exports = NodeHelper.create({
       });
 
       if (dirty) {
-        skipped.push(moduleName);
+        console.log(
+          `[MMM-TuAsistente] ⚠️ ${module.name} tiene cambios locales. Se omite.`
+        );
+
+        skipped.push(module.name);
         continue;
       }
 
+      // ========================================================
+      // COMPROBAR ACTUALIZACIONES REMOTAS
+      // ========================================================
+
       const count = await new Promise(resolve => {
         exec(
-          `git -C "${moduleDir}" fetch origin --quiet && git -C "${moduleDir}" rev-list --count HEAD..@{u}`,
+          `git -C "${moduleDir}" fetch origin --quiet && ` +
+          `git -C "${moduleDir}" rev-list --count HEAD..@{u}`,
           { timeout: 30000 },
           (error, stdout) => {
             if (error) {
@@ -245,7 +248,20 @@ module.exports = NodeHelper.create({
         );
       });
 
-      if (!count) continue;
+      if (!count) {
+        console.log(
+          `[MMM-TuAsistente] ✓ ${module.name} ya está actualizado.`
+        );
+        continue;
+      }
+
+      console.log(
+        `[MMM-TuAsistente] 🔄 ${module.name}: ${count} actualización(es).`
+      );
+
+      // ========================================================
+      // ACTUALIZAR
+      // ========================================================
 
       const pullResult = await new Promise(resolve => {
         exec(
@@ -256,9 +272,17 @@ module.exports = NodeHelper.create({
       });
 
       if (pullResult) {
-        updated.push(moduleName);
+        console.log(
+          `[MMM-TuAsistente] ✅ ${module.name} actualizado.`
+        );
+
+        updated.push(module.name);
       } else {
-        skipped.push(moduleName);
+        console.log(
+          `[MMM-TuAsistente] ❌ No se pudo actualizar ${module.name}.`
+        );
+
+        skipped.push(module.name);
       }
     }
 
@@ -267,29 +291,26 @@ module.exports = NodeHelper.create({
       skipped
     };
   },
+
   async checkModuleUpdates() {
     const modulesDir = path.join(__dirname, '..');
     const updates = [];
 
-    const entries = fs.readdirSync(modulesDir, {
-      withFileTypes: true
-    });
+    // ==========================================================
+    // CATÁLOGO AUTOMÁTICO DE MÓDULOS
+    // ==========================================================
 
-    for (const entry of entries) {
-      if (!entry.isDirectory()) continue;
-      if (entry.name === "MMM-TuAsistente-test" || entry.name.startsWith("MMM-TuAsistente_backup_")) continue;
+    const modules = moduleCatalog.getModules(modulesDir);
 
-
-      const moduleDir = path.join(modulesDir, entry.name);
-      if (!fs.existsSync(path.join(moduleDir, '.git'))) continue;
-
+    for (const module of modules) {
       const result = await new Promise(resolve => {
         exec(
-          `git -C "${moduleDir}" fetch origin --quiet && git -C "${moduleDir}" rev-list --count HEAD..@{u}`,
+          `git -C "${module.path}" fetch origin --quiet && git -C "${module.path}" rev-list --count HEAD..@{u}`,
           { timeout: 30000 },
           (error, stdout) => {
             resolve({
-              name: entry.name,
+              name: module.name,
+              displayName: module.displayName,
               count: error ? 0 : parseInt(stdout.trim(), 10) || 0
             });
           }
