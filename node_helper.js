@@ -2878,8 +2878,19 @@ async buscarYouTube(query) {
   speakText(text) {
     if (!text || !text.trim()) return;
 
-    const piperBin = path.join(__dirname, 'piper_tts', 'piper', 'piper');
-    const modelPath = path.join(__dirname, 'piper_tts', 'es_ES-davefx-medium.onnx');
+    const piperBin = path.join(
+      __dirname,
+      'piper_tts',
+      'piper',
+      'piper',
+      'piper'
+    );
+
+    const modelPath = path.join(
+      __dirname,
+      'piper_tts',
+      'es_ES-davefx-medium.onnx'
+    );
 
     const safeText = text
       .replace(/"/g, '\\"')
@@ -2896,7 +2907,10 @@ async buscarYouTube(query) {
     this.audioProcesses.push(p);
 
     p.on('exit', () => {
-      this.audioProcesses = this.audioProcesses.filter(process => process !== p);
+      this.audioProcesses = this.audioProcesses.filter(
+        process => process !== p
+      );
+
       if (this.audioProcesses.length === 0) {
         this.isSpeaking = false;
       }
