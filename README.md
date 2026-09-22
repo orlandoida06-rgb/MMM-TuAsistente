@@ -167,6 +167,7 @@ MagicMirror solo se reinicia cuando se ha realizado correctamente al menos una a
 <img src="https://raw.githubusercontent.com/orlandoida06-rgb/MMM-TuAsistente/main/images/youtube.png" alt="YouTube en MMM-TuAsistente" width="900">
 </p>
 
+
 ## 🎛️ Control de módulos por voz
 
 MMM-TuAsistente permite controlar la visibilidad de otros módulos de MagicMirror mediante comandos de voz.
