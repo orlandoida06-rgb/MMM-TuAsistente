@@ -136,13 +136,13 @@ MagicMirror solo se reinicia cuando se ha realizado correctamente al menos una a
 ## 🏠 Interfaz principal
 
 <p align="center">
-<img src="./images/asistente.png" alt="Interfaz principal de MMM-TuAsistente" width="900">
+<img src="https://raw.githubusercontent.com/orlandoida06-rgb/MMM-TuAsistente/main/images/asistente.png" alt="Interfaz principal de MMM-TuAsistente" width="900">
 </p>
 
 ## 🎙️ Escuchando
 
 <p align="center">
-<img src="./images/escuchando.png" alt="MMM-TuAsistente escuchando" width="900">
+<img src="https://raw.githubusercontent.com/orlandoida06-rgb/MMM-TuAsistente/main/images/escuchando.png" alt="MMM-TuAsistente escuchando" width="900">
 </p>
 
 <p align="center">
@@ -152,19 +152,19 @@ MagicMirror solo se reinicia cuando se ha realizado correctamente al menos una a
 ## 🧠 Pensando
 
 <p align="center">
-<img src="./images/pensando.png" alt="MMM-TuAsistente procesando" width="900">
+<img src="https://raw.githubusercontent.com/orlandoida06-rgb/MMM-TuAsistente/main/images/pensando.png" alt="MMM-TuAsistente procesando" width="900">
 </p>
 
 ## 🔊 Volumen
 
 <p align="center">
-<img src="./images/volumen.png" alt="Control de volumen" width="900">
+<img src="https://raw.githubusercontent.com/orlandoida06-rgb/MMM-TuAsistente/main/images/volumen.png" alt="Control de volumen" width="900">
 </p>
 
 ## ▶️ YouTube
 
 <p align="center">
-<img src="./images/youtube.png" alt="YouTube en MMM-TuAsistente" width="900">
+<img src="https://raw.githubusercontent.com/orlandoida06-rgb/MMM-TuAsistente/main/images/youtube.png" alt="YouTube en MMM-TuAsistente" width="900">
 </p>
 
 ## 🎛️ Control de módulos por voz
@@ -357,7 +357,7 @@ La función está diseñada para poder ampliarse posteriormente a medida que se 
 ## 🆘 Ayuda
 
 <p align="center">
-<img src="./images/ayuda.png" alt="Modo Ayuda de MMM-TuAsistente" width="900">
+<img src="https://raw.githubusercontent.com/orlandoida06-rgb/MMM-TuAsistente/main/images/ayuda.png" alt="Modo Ayuda de MMM-TuAsistente" width="900">
 </p>
 
 ---
