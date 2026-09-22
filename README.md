@@ -145,6 +145,10 @@ MagicMirror solo se reinicia cuando se ha realizado correctamente al menos una a
 <img src="./images/escuchando.png" alt="MMM-TuAsistente escuchando" width="900">
 </p>
 
+<p align="center">
+<img src="https://raw.githubusercontent.com/orlandoida06-rgb/MMM-TuAsistente/main/images/recording.jpg" alt="Grabación de voz" width="700">
+</p>
+
 ## 🧠 Pensando
 
 <p align="center">
@@ -357,28 +361,3 @@ La función está diseñada para poder ampliarse posteriormente a medida que se 
 </p>
 
 ---
-
-## 🖼️ Interfaz
-
-### 🎙️ Estados del asistente
-
-<p align="center">
-  <img src="https://raw.githubusercontent.com/orlandoida06-rgb/MMM-TuAsistente/main/images/asistente.png" width="30%">
-  <img src="https://raw.githubusercontent.com/orlandoida06-rgb/MMM-TuAsistente/main/images/escuchando.png" width="30%">
-  <img src="https://raw.githubusercontent.com/orlandoida06-rgb/MMM-TuAsistente/main/images/pensando.png" width="30%">
-</p>
-
-### 🎛️ Funciones
-
-<p align="center">
-  <img src="https://raw.githubusercontent.com/orlandoida06-rgb/MMM-TuAsistente/main/images/ayuda.png" width="30%">
-  <img src="https://raw.githubusercontent.com/orlandoida06-rgb/MMM-TuAsistente/main/images/volumen.png" width="30%">
-  <img src="https://raw.githubusercontent.com/orlandoida06-rgb/MMM-TuAsistente/main/images/youtube.png" width="30%">
-</p>
-
-### 🎤 Grabación
-
-<p align="center">
-  <img src="https://raw.githubusercontent.com/orlandoida06-rgb/MMM-TuAsistente/main/images/recording.jpg" width="50%">
-</p>
-
