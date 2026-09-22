@@ -135,37 +135,25 @@ MagicMirror solo se reinicia cuando se ha realizado correctamente al menos una a
 
 ## 🏠 Interfaz principal
 
-<p align="center">
-<img src="https://raw.githubusercontent.com/orlandoida06-rgb/MMM-TuAsistente/main/images/asistente.png" alt="Interfaz principal de MMM-TuAsistente" width="900">
-</p>
+![Interfaz principal de MMM-TuAsistente](https://raw.githubusercontent.com/orlandoida06-rgb/MMM-TuAsistente/main/images/asistente.png)
 
 ## 🎙️ Escuchando
 
-<p align="center">
-<img src="https://raw.githubusercontent.com/orlandoida06-rgb/MMM-TuAsistente/main/images/escuchando.png" alt="MMM-TuAsistente escuchando" width="900">
-</p>
+![MMM-TuAsistente escuchando](https://raw.githubusercontent.com/orlandoida06-rgb/MMM-TuAsistente/main/images/escuchando.png)
 
-<p align="center">
-<img src="https://raw.githubusercontent.com/orlandoida06-rgb/MMM-TuAsistente/main/images/recording.jpg" alt="Grabación de voz" width="700">
-</p>
+![Grabación de voz](https://raw.githubusercontent.com/orlandoida06-rgb/MMM-TuAsistente/main/images/recording.jpg)
 
 ## 🧠 Pensando
 
-<p align="center">
-<img src="https://raw.githubusercontent.com/orlandoida06-rgb/MMM-TuAsistente/main/images/pensando.png" alt="MMM-TuAsistente procesando" width="900">
-</p>
+![MMM-TuAsistente pensando](https://raw.githubusercontent.com/orlandoida06-rgb/MMM-TuAsistente/main/images/pensando.png)
 
 ## 🔊 Volumen
 
-<p align="center">
-<img src="https://raw.githubusercontent.com/orlandoida06-rgb/MMM-TuAsistente/main/images/volumen.png" alt="Control de volumen" width="900">
-</p>
+![Control de volumen](https://raw.githubusercontent.com/orlandoida06-rgb/MMM-TuAsistente/main/images/volumen.png)
 
 ## ▶️ YouTube
 
-<p align="center">
-<img src="https://raw.githubusercontent.com/orlandoida06-rgb/MMM-TuAsistente/main/images/youtube.png" alt="YouTube en MMM-TuAsistente" width="900">
-</p>
+![Control de YouTube](https://raw.githubusercontent.com/orlandoida06-rgb/MMM-TuAsistente/main/images/youtube.png)
 
 
 ## 🎛️ Control de módulos por voz
@@ -357,8 +345,6 @@ La función está diseñada para poder ampliarse posteriormente a medida que se 
 
 ## 🆘 Ayuda
 
-<p align="center">
-<img src="https://raw.githubusercontent.com/orlandoida06-rgb/MMM-TuAsistente/main/images/ayuda.png" alt="Modo Ayuda de MMM-TuAsistente" width="900">
-</p>
+![Modo Ayuda de MMM-TuAsistente](https://raw.githubusercontent.com/orlandoida06-rgb/MMM-TuAsistente/main/images/ayuda.png)
 
 ---
