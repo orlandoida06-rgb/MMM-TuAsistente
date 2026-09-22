@@ -355,3 +355,30 @@ La función está diseñada para poder ampliarse posteriormente a medida que se 
 <p align="center">
 <img src="./images/ayuda.png" alt="Modo Ayuda de MMM-TuAsistente" width="900">
 </p>
+
+---
+
+## 🖼️ Interfaz
+
+### 🎙️ Estados del asistente
+
+<p align="center">
+  <img src="./images/asistente.png" width="30%">
+  <img src="./images/escuchando.png" width="30%">
+  <img src="./images/pensando.png" width="30%">
+</p>
+
+### 🎛️ Funciones
+
+<p align="center">
+  <img src="./images/ayuda.png" width="30%">
+  <img src="./images/volumen.png" width="30%">
+  <img src="./images/youtube.png" width="30%">
+</p>
+
+### 🎤 Grabación
+
+<p align="center">
+  <img src="./images/recording.jpg" width="50%">
+</p>
+
