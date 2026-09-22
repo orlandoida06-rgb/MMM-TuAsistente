@@ -363,22 +363,22 @@ La función está diseñada para poder ampliarse posteriormente a medida que se 
 ### 🎙️ Estados del asistente
 
 <p align="center">
-  <img src="./images/asistente.png" width="30%">
-  <img src="./images/escuchando.png" width="30%">
-  <img src="./images/pensando.png" width="30%">
+  <img src="https://raw.githubusercontent.com/orlandoida06-rgb/MMM-TuAsistente/main/images/asistente.png" width="30%">
+  <img src="https://raw.githubusercontent.com/orlandoida06-rgb/MMM-TuAsistente/main/images/escuchando.png" width="30%">
+  <img src="https://raw.githubusercontent.com/orlandoida06-rgb/MMM-TuAsistente/main/images/pensando.png" width="30%">
 </p>
 
 ### 🎛️ Funciones
 
 <p align="center">
-  <img src="./images/ayuda.png" width="30%">
-  <img src="./images/volumen.png" width="30%">
-  <img src="./images/youtube.png" width="30%">
+  <img src="https://raw.githubusercontent.com/orlandoida06-rgb/MMM-TuAsistente/main/images/ayuda.png" width="30%">
+  <img src="https://raw.githubusercontent.com/orlandoida06-rgb/MMM-TuAsistente/main/images/volumen.png" width="30%">
+  <img src="https://raw.githubusercontent.com/orlandoida06-rgb/MMM-TuAsistente/main/images/youtube.png" width="30%">
 </p>
 
 ### 🎤 Grabación
 
 <p align="center">
-  <img src="./images/recording.jpg" width="50%">
+  <img src="https://raw.githubusercontent.com/orlandoida06-rgb/MMM-TuAsistente/main/images/recording.jpg" width="50%">
 </p>
 
