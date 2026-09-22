@@ -1,7 +1,7 @@
 <p align="center">
   <img src="./assets/logo.svg" alt="TuAsistente" width="360">
 </p>
-
+Asistente de voz para MagicMirror
 # MMM-TuAsistente
 
 ## 🚀 INSTALACIÓN
